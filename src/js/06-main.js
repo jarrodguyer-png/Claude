@@ -3,7 +3,7 @@ const curYm = () => (UI.tab === 'bank' ? reconcileMonth() : UI.ym);
 const findItem = (key, ym = curYm()) => itemsFor(ym).find(i => i.key === key);
 const isBlank = () => !D.templates.length && !D.txns.length && !Object.keys(D.months).length;
 /* tab names from earlier versions still work in links and saved settings */
-const LEGACY_TABS = { obligations: 'month', bills: 'month', statements: 'bank', spending: 'bank' };
+const LEGACY_TABS = { obligations: 'month', bills: 'month', statements: 'bank', spending: 'bank', growth: 'income' };
 function go(tab) {
   if (tab === 'spending') UI.sub = 'spending';
   tab = LEGACY_TABS[tab] || tab;

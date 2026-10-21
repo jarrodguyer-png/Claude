@@ -14,7 +14,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['planner', 'Planner'], ['growth', 'Growth'], ['bank', 'Reconcile']];
+const TABS = [['month', 'Month'], ['planner', 'Planner'], ['income', 'Income'], ['bank', 'Reconcile']];
 /* viewers only get the spending summary on that tab, so it says so */
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
@@ -60,11 +60,7 @@ function viewMonth() {
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
   </section>`;
-  const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
-  const group = list => {
-    const open = list.filter(i => !i.done && !i.skip), done = list.filter(i => i.done || i.skip);
-    return open.map(rowHTML).join('') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
-  };
+  const bills = items.filter(i => i.type === 'bill' && !i.budget), buds = items.filter(i => i.budget);
   // paid bills leave the list; a quiet line at the bottom brings them back (view-only copies show them, since seeing what is paid is the point)
   const showPaid = UI.showPaid ?? ro;
   const billList = list => {
@@ -73,13 +69,23 @@ function viewMonth() {
       + (showPaid ? paid.map(rowHTML).join('') : '')
       + (paid.length ? `<li class="paidbar"><button type="button" class="btn ghost sm" data-act="toggle-paid" aria-expanded="${showPaid}">${showPaid ? 'Hide' : 'Show'} ${paid.some(i => i.skip) ? 'paid and skipped bills' : 'paid bills'} · ${paid.length}</button></li>` : '');
   };
-  const budgetCard = (buds.length || !ro) ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro || !buds.length ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap + to log spending. Red when over.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="bill" data-budget="1">+ Add expense</button>'}</div>
-    ${buds.length ? `<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul><div class="card-f"><span class="total num">Spent ${money(sum(buds, x => x.spent))}</span></div>` : '<p class="muted" style="padding:2px 18px 18px">Add things that change each month, like groceries or dining out, and keep a running total of what you spend.</p>'}</section>` : '';
+  const addExp = ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="bill" data-budget="1">+ Add expense</button>';
+  const budgetCard = (buds.length || !ro) ? `<section class="card"><div class="card-h"><h2>Variable expenses</h2></div>
+    ${buds.length ? `<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul>` : '<p class="muted" style="padding:2px 18px 14px">Things that change each month, like groceries or dining out, with a running total of what you spend.</p>'}
+    <div class="card-f"><span class="total num">${buds.length ? `Spent ${money(sum(buds, x => x.spent))}` : ''}</span>${addExp}</div></section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><div><h2>Bills</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap a bill to change it.</p>'}</div>${ro ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div>
     ${bills.length ? `<ul class="list">${billList(bills)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
     <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span></div>
   </section>`;
+  // bills, then the variable expenses (beside them on a wide screen, under them on a phone)
+  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${budgetCard}</div></div>`;
+}
+/* ----- Income: the month's income list with a one-line entry form ----- */
+function incomeCard(ym, items) {
+  const ro = RO(), inc = items.filter(i => i.type === 'income'), S = summarize(items);
+  const open = inc.filter(i => !i.done && !i.skip), done = inc.filter(i => i.done || i.skip);
+  const list = open.map(rowHTML).join('') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
   const incNames = [...new Set([...D.templates.filter(t => t.type === 'income').map(t => t.name), ...Object.values(D.months).flatMap(m => m.extras.filter(x => x.type === 'income').map(x => x.name))])].slice(0, 30);
   const incForm = ro ? '' : `<form class="incf" autocomplete="off">
       <input name="source" class="inp" list="incsrc" placeholder="Source, e.g. Salary" aria-label="Income source" required>
@@ -87,13 +93,12 @@ function viewMonth() {
       <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date received">
       <button class="btn primary sm" type="submit">Add income</button>
       <datalist id="incsrc">${incNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist></form>`;
-  const incCard = `<section class="card">
+  return `<section class="card">
     <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="income">+ Repeating income</button>'}</div>
     ${incForm}
-    ${inc.length ? `<ul class="list">${group(inc)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
+    ${inc.length ? `<ul class="list">${list}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
+    <div class="card-f"><span class="total num">Received ${money(S.incomeGot)}</span><span class="muted num" style="font-size:13px">of ${money(S.incomeTotal)} expected</span></div>
   </section>`;
-  // bills with the variable expenses right under them, income beside (below, on a phone)
-  return nav + summary + `<div class="cols"><div class="stack">${billsCard}${budgetCard}</div><div class="stack">${incCard}</div></div>`;
 }
 /* a variable expense, laid out like a bill: + opens a small entry panel, the amount is what has been spent so far,
    and the line turns red when it goes over. An amount of 0 means no limit set, so it just tracks. */
@@ -166,7 +171,7 @@ function viewPlanner() {
   return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
 }
 
-/* ----- Growth: overall savings and investment totals ----- */
+/* ----- Savings and investments: overall totals, shown on the Income tab ----- */
 function growthCard(kind, label) {
   const g = growthFor(kind), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
   return `<section class="card"><div class="card-h"><h2>${label}</h2></div>
@@ -185,25 +190,26 @@ function growthCard(kind, label) {
 }
 function goalCard() {
   const ym = UI.ym, P = growthPlan(ym), pct = P.goal > 0 ? Math.min(100, P.done / P.goal * 100) : 0, reached = P.income > 0 && P.need <= 0;
-  const nav = `<div class="goalnav"><button class="icon-btn" data-act="month-prev" aria-label="Previous month">${ICON.chevL}</button><span class="mlabel">${fmtMonth(ym)}</span><button class="icon-btn" data-act="month-next" aria-label="Next month">${ICON.chevR}</button></div>`;
   const body = P.income <= 0
     ? `<p class="muted">No income has been logged for ${fmtMonth(ym)} yet. Log it on the Month tab and a suggestion shows up here.</p>`
     : `<div class="bbar${reached ? ' good' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="Put aside toward the goal"><i style="width:${pct}%"></i></div>
        <p><b class="num">${money(P.done)}</b> <span class="muted">of ${money(P.goal)} put aside, from ${money(P.income)} of income received</span></p>
        ${reached ? '<p><span class="pill good">Goal reached this month</span></p>' : `<div class="suggest"><div>Suggested: put <b class="num">${money(P.need)}</b> more aside</div>
          <div class="actions">${P.parts.filter(p => p.suggest > 0).map(p => `<button class="btn primary sm" data-act="goal-put" data-kind="${p.kind}" data-amt="${p.suggest}">Put ${money(p.suggest)} in ${esc(p.label)}</button>`).join('')}</div></div>`}`;
-  return `<section class="card"><div class="card-h"><div><h2>Put ${P.pct}% of income aside</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Savings and investments together, from income you have received.</p></div>${nav}</div>
+  return `<section class="card"><div class="card-h"><div><h2>Put ${P.pct}% of income aside</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Savings and investments together, from income you have received.</p></div></div>
     <div class="goalbody">${body}
       <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
 }
-function viewGrowth() {
+function viewIncome() {
+  const ym = UI.ym, items = itemsFor(ym), nav = sampleBanner() + monthNav(ym);
+  if (RO()) return nav + `<div class="stack">${incomeCard(ym, items)}</div>`; // viewers see the income list, not savings
   const gs = GROWTH.map(([k, l]) => ({ k, l, g: growthFor(k) })), total = sum(gs, x => x.g.total);
-  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals.</p></div></div>
-    <section class="card"><div class="stats three">
+  return nav + `<div class="stack">
+    <div class="cols"><div class="stack">${incomeCard(ym, items)}</div><div class="stack">${goalCard()}</div></div>
+    <section class="card"><div class="card-h"><h2>Savings and investments</h2></div><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
-    <div style="margin-top:16px">${goalCard()}</div>
-    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l)}</div>`).join('')}</div>`;
+    <div class="cols">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l)}</div>`).join('')}</div></div>`;
 }
 
 /* ----- one repeating item, as listed in Settings ----- */
@@ -374,8 +380,8 @@ function viewSpending() {
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, growth: viewGrowth, bank: viewBank };
-const visibleTabs = () => TABS.filter(([id]) => !(RO() && (id === 'planner' || id === 'growth')));
+const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, income: viewIncome, bank: viewBank };
+const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'planner'));
 function render() {
   const tabs = $('#tabs');
   if (Store.mode === 'locked') {

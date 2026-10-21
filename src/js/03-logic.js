@@ -109,7 +109,7 @@ function addGrowth(kind, amount, date, note, adj) { D.growth.push({ id: uid('g')
 /* ----- the goal: a share of income received goes to savings and investments together ----- */
 const growthPct = () => { const p = D.settings.growthPct; return p > 0 ? p : 10; };
 const incomeReceived = ym => sum(itemsFor(ym).filter(i => i.type === 'income' && i.done && !i.skip), i => i.amount);
-/* new money put aside in a month: deposits entered on the Growth tab
+/* new money put aside in a month: deposits entered on the Income tab
    (set-to-a-new-total adjustments and withdrawals are not new money) */
 const asideFor = (kind, ym) => sum(D.growth.filter(e => e.kind === kind && !e.adj && e.amount > 0 && ymOf(e.date) === ym), e => e.amount);
 function growthPlan(ym) {

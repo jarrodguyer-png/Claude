@@ -63,7 +63,7 @@ function moneyShort(n) {
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    growth    : [{id,kind:'savings'|'investing',date,amount,note,adj?}] deposits (+), withdrawals (-) and set-to-a-new-total adjustments (adj)
-               behind the Growth tab, the only place savings and investments are recorded
+               on the Income tab, the only place savings and investments are recorded
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
 const DEFAULT_CATS = ['Housing', 'Utilities', 'Groceries', 'Dining', 'Fuel', 'Transport', 'Insurance', 'Health', 'Subscriptions', 'Shopping',
@@ -132,8 +132,8 @@ function dataFromDocs(docs) {
   return d;
 }
 
-/* Savings and investments used to be "goal" lines under Variable expenses. They now live only on the Growth tab,
-   so any entries on such a line become Growth deposits and the line is dropped. Returns the months it changed. */
+/* Savings and investments used to be "goal" lines under Variable expenses. They now live only on the Income tab,
+   so any entries on such a line become savings and investment deposits and the line is dropped. Returns the months it changed. */
 function migrateGoalLines(d) {
   const goals = d.templates.filter(t => t.goal);
   if (!goals.length) return null;

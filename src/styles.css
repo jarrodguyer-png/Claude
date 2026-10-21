@@ -208,9 +208,6 @@ details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-
 .out-n { color: var(--ink-2); }
 
 /* the 10% goal on Growth */
-.goalnav { display: flex; align-items: center; gap: 6px; }
-.goalnav .icon-btn { width: 34px; height: 34px; }
-.mlabel { font-weight: 600; font-size: 14px; min-width: 9ch; text-align: center; }
 .goalbody { display: grid; gap: 10px; padding: 0 18px 18px; }
 .goalbody p { margin: 0; }
 .bbar { height: 12px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line-2); overflow: hidden; }
