@@ -1,6 +1,7 @@
 /* ---------- views ---------- */
 const UI = { tab: 'month', ym: thisMonth(), open: null, hidePaid: false, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
+const RO = () => Store.readonly;
 const ICON = {
   check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.6l3.1 3L12.8 4.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevL: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3.5L5.5 9l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -13,13 +14,13 @@ const TABS = [['month', 'Month'], ['obligations', 'Obligations'], ['statements',
 
 function chromeHTML() {
   return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
-    <div class="top-r"><span id="saveState"></span><button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button></div>`;
+    <div class="top-r"><span id="saveState"></span>${RO() ? '' : `<button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button>`}</div>`;
 }
 function emptyState(title, text, buttons = '') {
   return `<div class="empty"><h3>${esc(title)}</h3><p>${text}</p><div class="actions" style="justify-content:center">${buttons}</div></div>`;
 }
 function sampleBanner() {
-  return D.sample ? `<div class="banner info"><span>You are looking at example data. Try everything, then clear it to start with your own.</span><button class="btn sm" data-act="clear-sample">Clear example data</button></div>` : '';
+  return D.sample && !RO() ? `<div class="banner info"><span>You are looking at example data. Try everything, then clear it to start with your own.</span><button class="btn sm" data-act="clear-sample">Clear example data</button></div>` : '';
 }
 const catOptions = (sel, cats = D.cats) => cats.map(c => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join('');
 
@@ -34,7 +35,7 @@ function viewMonth() {
     ${ym !== cur ? `<button class="btn sm" data-act="month-today">Back to ${fmtMonth(cur)}</button>` : ''}
   </div>`;
   if (!D.templates.length && !items.length) {
-    return nav + `<section class="card">${emptyState('Start with your monthly bills', 'List the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
+    return nav + `<section class="card">${RO() ? emptyState('Nothing here yet', 'Bills and income will appear here once they have been added.') : emptyState('Start with your monthly bills', 'List the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
       `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add a bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
@@ -53,26 +54,26 @@ function viewMonth() {
   const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
   const billsCard = `<section class="card">
     <div class="card-h"><h2>Bills</h2><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label></div>
-    ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.'}</p>`}
-    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span><button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button></div>
+    ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
+    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
   </section>`;
   const incCard = `<section class="card">
     <div class="card-h"><h2>Income</h2></div>
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
-    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button></div>
+    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button>'}</div>
   </section>
-  <p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>`;
+  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
   return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>`;
 }
 function rowHTML(it) {
-  const st = itemStatus(it), open = UI.open === it.key, verb = it.type === 'income' ? 'received' : 'paid';
-  const link = it.txn ? txnById(it.txn) : null;
+  const ro = RO(), st = itemStatus(it), open = UI.open === it.key && !ro, verb = it.type === 'income' ? 'received' : 'paid';
+  const link = it.txn ? txnById(it.txn) : null, dis = ro || it.skip, tag = ro ? 'div' : 'button';
   return `<li class="row ${st}">
-    <button class="chk" role="checkbox" aria-checked="${it.done}" data-act="toggle" data-key="${esc(it.key)}" aria-label="Mark ${esc(it.name)} ${verb}"${it.skip ? ' disabled' : ''}>${ICON.check}</button>
-    <button class="rmain" data-act="open" data-key="${esc(it.key)}" aria-expanded="${open}">
+    <button class="chk" role="checkbox" aria-checked="${it.done}"${dis ? ' disabled' : ` data-act="toggle" data-key="${esc(it.key)}"`} aria-label="${esc(it.name)} ${it.done ? verb : 'not ' + verb}">${ICON.check}</button>
+    <${tag} class="rmain"${ro ? '' : ` data-act="open" data-key="${esc(it.key)}" aria-expanded="${open}"`}>
       <span class="rname">${esc(it.name)}${it.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-      <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}</span>
-    </button>
+      <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}${ro && it.note ? `<span aria-hidden="true">·</span><span>${esc(it.note)}</span>` : ''}</span>
+    </${tag}>
     <span class="ramt">${money(it.amount)}</span>
     ${open ? detailHTML(it, link) : ''}
   </li>`;
@@ -104,9 +105,9 @@ function viewObligations() {
   const live = D.templates.filter(t => !t.end || t.end >= cur);
   const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
   const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
-  const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">Everything that repeats. Each month's checklist is built from this list, so add a bill once and it shows up every time it is due.</p></div>
-    <div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div></div>`;
-  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
+  const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
+    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div>'}</div>`;
+  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && t.anchor ? +t.anchor.slice(8, 10) : (t.day || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
   const byCat = {};
@@ -131,11 +132,12 @@ function viewObligations() {
 }
 function tmplRow(t) {
   const eq = t.freq !== 'monthly' ? `about ${money(monthlyEquiv(t))} / month` : '';
-  return `<button class="orow" data-act="edit-tmpl" data-id="${t.id}">
+  const tag = RO() ? 'div' : 'button';
+  return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
     <span class="rmeta"><span>${esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(t.amount)}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
-  </button>`;
+  </${tag}>`;
 }
 
 /* ----- Statements ----- */
@@ -258,7 +260,7 @@ function monthChart(by, W) {
 function viewSpending() {
   const head = `<div class="pagehead"><div><h1>Where the money goes</h1><p class="lede">Built from the statements you have added. Transfers are left out, and refunds reduce the category they belong to.</p></div>
     <label class="field" style="grid-auto-flow:column;align-items:center;gap:10px">Period<select class="inp sm" data-chg="range" style="min-width:150px">${RANGES.map(([v, l]) => `<option value="${v}"${UI.range === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>`;
-  if (!D.txns.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing to show yet', 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', '<button class="btn primary" data-act="tab" data-tab="statements">Add a statement</button>' + (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
+  if (!D.txns.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : '<button class="btn primary" data-act="tab" data-tab="statements">Add a statement</button>' + (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
   const { from, to } = rangeFor(UI.range), st = spendStats(from, to), months = Object.keys(st.byMonth);
   let act = months.filter(m => st.byMonth[m].in || st.byMonth[m].out);
   if (!act.length) act = months;
@@ -266,7 +268,7 @@ function viewSpending() {
   const label = first === last ? fmtMonth(first) : `${fmtMonth(first)} to ${fmtMonth(last)}`;
   const chartBy = {};
   months.slice(months.indexOf(first), months.indexOf(last) + 1).forEach(m => { chartBy[m] = st.byMonth[m]; });
-  if (!st.count) return sampleBanner() + head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', '<button class="btn" data-act="tab" data-tab="statements">Go to statements</button>')}</section>`;
+  if (!st.count) return sampleBanner() + head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : '<button class="btn" data-act="tab" data-tab="statements">Go to statements</button>')}</section>`;
   const net = r2(st.income - st.spent), active = act.length || 1;
   const cats = Object.entries(st.byCat).filter(([, v]) => Math.abs(v) >= .005).sort((a, b) => b[1] - a[1]);
   const pos = cats.filter(([, v]) => v > 0), maxC = pos.length ? pos[0][1] : 1;
@@ -278,7 +280,7 @@ function viewSpending() {
     <div class="stat"><div class="lbl">${net >= 0 ? 'Kept' : 'Overspent'}</div><div class="val${net < 0 ? ' neg' : ''}">${money(Math.abs(net))}</div><div class="sub">${st.income ? Math.round(net / st.income * 100) + '% of income' : 'no income lines'}</div></div>
     <div class="stat"><div class="lbl">Tracked bills</div><div class="val">${st.spent ? Math.round(st.tracked / st.spent * 100) : 0}%</div><div class="sub">${money(st.tracked)} matched to your list</div></div></div></section>`;
   const catCard = `<section class="card"><div class="card-h"><h2>By category</h2></div><div class="card-b">
-    ${shownCats.map(([c, v]) => `<button class="cbar" data-act="drill" data-cat="${esc(c)}" title="See ${esc(c)} transactions"><span class="nm">${esc(c)}</span><span class="bar"><i style="width:${Math.max(1.5, v / maxC * 100)}%"></i></span><span class="amt">${money(v)}<small>${Math.round(v / st.spent * 100)}%</small></span></button>`).join('')}
+    ${shownCats.map(([c, v]) => `<${RO() ? 'div' : 'button'} class="cbar"${RO() ? '' : ` data-act="drill" data-cat="${esc(c)}" title="See ${esc(c)} transactions"`}><span class="nm">${esc(c)}</span><span class="bar"><i style="width:${Math.max(1.5, v / maxC * 100)}%"></i></span><span class="amt">${money(v)}<small>${Math.round(v / st.spent * 100)}%</small></span></${RO() ? 'div' : 'button'}>`).join('')}
     ${rest.length ? `<div class="cbar"><span class="nm muted">${rest.length} smaller categories</span><span></span><span class="amt">${money(sum(rest, x => x[1]))}</span></div>` : ''}</div></section>`;
   const chartCard = act.length > 1 ? `<section class="card"><div class="card-h"><h2>Month by month</h2></div>
     <div class="legend"><span><i style="background:var(--s1)"></i>Money in</span><span><i style="background:var(--s2)"></i>Spent</span></div>
@@ -286,7 +288,7 @@ function viewSpending() {
     <details class="tv"><summary>View as table</summary><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Month</th><th class="r">Money in</th><th class="r">Spent</th><th class="r">Net</th></tr></thead><tbody>${Object.keys(chartBy).map(m => `<tr><td>${fmtMonth(m)}</td><td class="r num">${money(st.byMonth[m].in)}</td><td class="r num">${money(st.byMonth[m].out)}</td><td class="r num">${money(st.byMonth[m].in - st.byMonth[m].out, { sign: true })}</td></tr>`).join('')}</tbody></table></div></details></section>` : '';
   const merch = st.merchants.filter(m => m.total > 0).sort((a, b) => b.total - a.total).slice(0, 8);
   const merchCard = merch.length ? `<section class="card"><div class="card-h"><h2>Biggest merchants</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Merchant</th><th class="r">Visits</th><th class="r">Total</th></tr></thead><tbody>${merch.map(m => `<tr><td class="desc">${esc(titleCase(m.key))}</td><td class="r num">${m.n}</td><td class="r num">${money(m.total)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
-  UI.rec = detectRecurring();
+  UI.rec = RO() ? [] : detectRecurring();
   const recCard = UI.rec.length ? `<section class="card"><div class="card-h"><h2>Looks like a recurring bill</h2></div>
     <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not on your obligations list yet.</p>
     ${UI.rec.map((r, i) => `<div class="rec"><div><div class="rname">${esc(r.name)}</div><div class="rmeta"><span class="num">about ${money(r.amount)}</span><span aria-hidden="true">·</span><span>seen in ${r.months} months</span><span aria-hidden="true">·</span><span>${esc(r.cat)}</span></div></div><button class="btn sm" data-act="add-recurring" data-idx="${i}">Add as bill</button></div>`).join('')}</section>` : '';
@@ -295,9 +297,17 @@ function viewSpending() {
 
 /* ----- shell ----- */
 const VIEWS = { month: () => sampleBanner() + viewMonth(), obligations: viewObligations, statements: viewStatements, spending: viewSpending };
+const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'statements'));
 function render() {
   const tabs = $('#tabs');
-  tabs.innerHTML = TABS.map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${label}</button>`).join('');
+  if (Store.mode === 'locked') {
+    tabs.innerHTML = '';
+    $('#app').innerHTML = `<section class="card">${emptyState('Sign in to view this ledger', 'This page was shared with you. It loads once you are signed in to Claude with the account it was shared with.')}</section>`;
+    return;
+  }
+  if (!visibleTabs().some(([id]) => id === UI.tab)) UI.tab = 'month';
+  $('#top').innerHTML = chromeHTML();
+  tabs.innerHTML = visibleTabs().map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${label}</button>`).join('');
   $('#app').innerHTML = VIEWS[UI.tab]();
   const chip = $('#saveState');
   if (chip) chip.replaceWith(saveChip());

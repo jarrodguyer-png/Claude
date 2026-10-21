@@ -136,47 +136,66 @@ function lsBackend() {
     async remove(k) { localStorage.removeItem(P + k); }
   };
 }
-function cloudBackend(db, id) {
-  const col = db.collection('data/users/' + id);
+/* The ledger lives at a shared path so people the page is shared with can read it.
+   The db rules in the publish call let only the page's owner write there. */
+const SHARED_PATH = 'ledger';
+function cloudBackend(db, path, canWrite) {
+  const col = db.collection(path);
+  const toDocs = snap => { const out = {}; snap.docs.forEach(d => { out[d.id] = JSON.parse(JSON.stringify(d.data())); }); return out; };
   return {
-    mode: 'cloud',
-    async list() {
-      const snap = await col.limit(1000).get();
-      const out = {};
-      snap.docs.forEach(d => { out[d.id] = JSON.parse(JSON.stringify(d.data())); });
-      return out;
-    },
+    mode: canWrite ? 'cloud' : 'cloud-view',
+    async list() { return toDocs(await col.limit(1000).get()); },
     async set(k, b) { await col.doc(k).set(b); },
-    async remove(k) { await col.doc(k).delete(); }
+    async remove(k) { await col.doc(k).delete(); },
+    watch(cb) { return col.limit(1000).onSnapshot(s => cb(toDocs(s)), () => { /* the next page load recovers */ }); }
   };
+}
+function lockedBackend() { return { mode: 'locked', async list() { return {}; }, async set() {}, async remove() {} }; }
+/* Earlier versions kept the ledger in the owner's private space. Copy it to the shared path once, then remove the old copy. */
+async function migratePrivate(db, id, shared) {
+  const priv = cloudBackend(db, 'data/users/' + id, true), old = await priv.list(), keys = Object.keys(old);
+  if (!keys.length) return null;
+  for (const k of keys) await shared.set(k, old[k]);
+  const check = await shared.list();
+  if (keys.every(k => check[k])) for (const k of keys) await priv.remove(k);
+  return check;
 }
 
 const Store = {
   backend: null, known: new Set(), timer: null, saving: false, state: 'saved', detail: '',
   async init() {
-    let backend = null;
-    try {
-      if (window.claude && window.claude.use) {
-        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-        const id = db && user ? await user.id() : null;
-        if (db && id) backend = cloudBackend(db, id);
-      }
-    } catch (e) { backend = null; }
+    let backend = null, docs = null;
+    if (window.claude && window.claude.use) {
+      let db = null, user = null;
+      try { [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]); } catch (e) { /* capabilities unavailable */ }
+      const owner = user ? await user.isOwner() : false;
+      const id = db && user ? await user.id() : null;
+      if (db && id) {
+        backend = cloudBackend(db, SHARED_PATH, owner);
+        docs = await backend.list();
+        if (owner && !docs.meta) docs = (await migratePrivate(db, id, backend)) || docs;
+      } else if (!owner) backend = lockedBackend();
+    }
     if (!backend) { try { backend = lsBackend(); } catch (e) { backend = memBackend(); } }
     this.backend = backend;
-    const docs = await backend.list();
+    if (!docs) docs = await backend.list();
     this.known = new Set(Object.keys(docs));
     D = dataFromDocs(docs);
+    if (backend.mode === 'cloud-view') {
+      let first = true;
+      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); if (typeof render === 'function') render(); });
+    }
   },
   get mode() { return this.backend ? this.backend.mode : 'memory'; },
-  schedule() { this.setState('busy'); clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 450); },
+  get readonly() { return this.mode === 'cloud-view' || this.mode === 'locked'; },
+  schedule() { if (this.readonly) return; this.setState('busy'); clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 450); },
   setState(s, detail = '') {
     this.state = s; this.detail = detail;
     const el = document.getElementById('saveState');
     if (el) el.replaceWith(saveChip());
   },
   async flush() {
-    if (this.saving || !this.backend) return;
+    if (this.saving || !this.backend || this.readonly) return;
     this.saving = true;
     let failed = null;
     while (dirty.size) {
@@ -215,7 +234,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 function saveChip() {
   const s = document.createElement('span');
   s.id = 'saveState';
-  const where = Store.mode === 'cloud' ? 'Saved to your private storage' : Store.mode === 'browser' ? 'Saved in this browser' : 'Not saved. Export a backup before closing';
+  if (Store.readonly) { s.className = 'save ro'; s.textContent = 'View only'; s.title = 'You can look at everything here but not change it'; return s; }
+  const where = Store.mode === 'cloud' ? 'Saved with this page on your Claude account' : Store.mode === 'browser' ? 'Saved in this browser' : 'Not saved. Export a backup before closing';
   s.className = 'save' + (Store.state === 'busy' ? ' busy' : Store.state === 'err' || Store.mode === 'memory' ? ' err' : '');
   s.textContent = Store.state === 'busy' ? 'Saving…' : Store.state === 'err' ? Store.detail : Store.mode === 'cloud' ? 'Saved' : where;
   s.title = where;

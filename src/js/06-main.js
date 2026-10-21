@@ -90,9 +90,12 @@ const ACTIONS = {
   'imp-cancel-all': () => { closeModal(true); IM = null; IMQ = []; finishImports(); },
   'imp-row-flip': el => { const r = IM.rows[+el.dataset.i]; if (r) { r.amt = -r.amt; $('#impPrev').innerHTML = previewTable(); } }
 };
+const RO_OK = new Set(['tab', 'month-prev', 'month-next', 'month-today']);
+const RO_CHANGE = new Set(['hidepaid', 'range']);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
+  if (RO() && !RO_OK.has(el.dataset.act)) return;
   if (el.dataset.act !== 'del-import') UI.confirm = null;
   const h = ACTIONS[el.dataset.act];
   if (h) h(el, e);
@@ -132,7 +135,7 @@ const CHANGE = {
 };
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-chg]');
-  if (el && CHANGE[el.dataset.chg]) CHANGE[el.dataset.chg](el);
+  if (el && CHANGE[el.dataset.chg] && (!RO() || RO_CHANGE.has(el.dataset.chg))) CHANGE[el.dataset.chg](el);
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { UI.q = e.target.value; UI.txLimit = 100; $('#txnList').innerHTML = txnTable(); }
@@ -151,10 +154,11 @@ for (const ev of ['pointermove', 'pointerdown']) {
 document.addEventListener('scroll', hideTip, { passive: true });
 
 /* files: picker and drag-and-drop */
-$('#file').addEventListener('change', e => { const files = [...e.target.files]; e.target.value = ''; handleFiles(files); });
+$('#file').addEventListener('change', e => { if (RO()) return; const files = [...e.target.files]; e.target.value = ''; handleFiles(files); });
 document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); const d = $('#drop'); if (d) d.classList.add('over'); } });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) { const d = $('#drop'); if (d) d.classList.remove('over'); } });
 document.addEventListener('drop', e => {
+  if (RO()) return;
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); const d = $('#drop'); if (d) d.classList.remove('over'); handleFiles(e.dataTransfer.files); }
 });
 
@@ -167,9 +171,11 @@ async function main() {
   $('#saveState').replaceWith(saveChip());
   $('#app').innerHTML = '<div class="empty"><p>Loading your ledger…</p></div>';
   await Store.init();
+  $('#top').innerHTML = chromeHTML();
+  $('#saveState').replaceWith(saveChip());
   const hash = location.hash.slice(1);
   let saved = null; try { saved = localStorage.getItem('billledger.tab'); } catch (e) { /* ignore */ }
-  const pick = [hash, saved].find(t => TABS.some(x => x[0] === t));
+  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === t));
   if (pick) UI.tab = pick;
   render();
 }

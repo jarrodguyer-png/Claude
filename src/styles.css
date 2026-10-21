@@ -69,6 +69,7 @@ button { cursor: pointer; }
 .save { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .save::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 .save.busy::before { background: var(--warn); }
+.save.ro::before { background: var(--accent); }
 .save.err { color: var(--bad); }
 .save.err::before { background: var(--bad); }
 .tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; gap: 4px; background: var(--bg); padding-block: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
@@ -137,7 +138,8 @@ button { cursor: pointer; }
 .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding: 4px 18px; border-top: 1px solid var(--line-2); }
 .list > .row:first-child { border-top: 1px solid var(--line-2); }
 .chk { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--muted); background: var(--surface); display: grid; place-items: center; padding: 0; color: transparent; flex: none; }
-.chk:hover { border-color: var(--accent); }
+.chk:hover:not([disabled]) { border-color: var(--accent); }
+.chk[disabled] { cursor: default; }
 .chk[aria-checked="true"] { background: var(--good); border-color: var(--good); color: #fff; }
 .chk svg { width: 16px; height: 16px; }
 .rmain { text-align: left; background: none; border: 0; padding: 10px 0; min-width: 0; display: grid; gap: 1px; border-radius: 8px; }
@@ -169,7 +171,8 @@ button { cursor: pointer; }
 
 /* obligations */
 .orow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line-2); padding: 11px 18px; }
-.orow:hover { background: var(--surface-2); }
+button.orow:hover { background: var(--surface-2); }
+div.orow { cursor: default; }
 .orow .rname { font-weight: 600; }
 .orow .eq { font-size: 12.5px; color: var(--muted); text-align: right; }
 .cbar { display: grid; grid-template-columns: minmax(84px, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; width: 100%; background: none; border: 0; text-align: left; border-radius: 8px; }

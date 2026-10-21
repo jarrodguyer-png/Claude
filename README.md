@@ -15,7 +15,19 @@ Open `index.html` in a browser, or host the folder anywhere static (GitHub Pages
 
 Data is saved in your browser's local storage. Use **Settings → Export backup** now and then, and before clearing browser data. **Restore from backup** brings it back, including on another device.
 
-When the same page is published as a Claude Artifact it saves to your private storage on your Claude account instead, so it is the same on every device.
+When the same page is published as a Claude Artifact it saves with the page on your Claude account instead, so it is the same on every device.
+
+## Share a view-only copy
+
+Publish the page as an Artifact with these capabilities, then use the Share menu on the page to invite your spouse by email as a **Viewer**:
+
+```json
+{ "db": { "rules": [ { "path": "ledger", "read": "view", "write": "owner" } ] }, "user": {}, "downloads": true }
+```
+
+Only the owner can write to the ledger. A viewer sees Month, Obligations and Spending, updated live, with every edit control removed. The Statements tab is hidden for viewers, although the underlying lines are readable by anyone you share with, so share only with people you trust with your finances. Invite by email; do not use a public link.
+
+Data saved by the first version (in the owner's private space) is copied to the shared ledger automatically the first time the owner opens the page.
 
 ## Statement formats
 

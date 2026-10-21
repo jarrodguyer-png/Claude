@@ -83,6 +83,7 @@ button { cursor: pointer; }
 .save { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .save::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 .save.busy::before { background: var(--warn); }
+.save.ro::before { background: var(--accent); }
 .save.err { color: var(--bad); }
 .save.err::before { background: var(--bad); }
 .tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; display: flex; gap: 4px; background: var(--bg); padding-block: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
@@ -151,7 +152,8 @@ button { cursor: pointer; }
 .row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding: 4px 18px; border-top: 1px solid var(--line-2); }
 .list > .row:first-child { border-top: 1px solid var(--line-2); }
 .chk { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--muted); background: var(--surface); display: grid; place-items: center; padding: 0; color: transparent; flex: none; }
-.chk:hover { border-color: var(--accent); }
+.chk:hover:not([disabled]) { border-color: var(--accent); }
+.chk[disabled] { cursor: default; }
 .chk[aria-checked="true"] { background: var(--good); border-color: var(--good); color: #fff; }
 .chk svg { width: 16px; height: 16px; }
 .rmain { text-align: left; background: none; border: 0; padding: 10px 0; min-width: 0; display: grid; gap: 1px; border-radius: 8px; }
@@ -183,7 +185,8 @@ button { cursor: pointer; }
 
 /* obligations */
 .orow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line-2); padding: 11px 18px; }
-.orow:hover { background: var(--surface-2); }
+button.orow:hover { background: var(--surface-2); }
+div.orow { cursor: default; }
 .orow .rname { font-weight: 600; }
 .orow .eq { font-size: 12.5px; color: var(--muted); text-align: right; }
 .cbar { display: grid; grid-template-columns: minmax(84px, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; width: 100%; background: none; border: 0; text-align: left; border-radius: 8px; }
@@ -423,47 +426,66 @@ function lsBackend() {
     async remove(k) { localStorage.removeItem(P + k); }
   };
 }
-function cloudBackend(db, id) {
-  const col = db.collection('data/users/' + id);
+/* The ledger lives at a shared path so people the page is shared with can read it.
+   The db rules in the publish call let only the page's owner write there. */
+const SHARED_PATH = 'ledger';
+function cloudBackend(db, path, canWrite) {
+  const col = db.collection(path);
+  const toDocs = snap => { const out = {}; snap.docs.forEach(d => { out[d.id] = JSON.parse(JSON.stringify(d.data())); }); return out; };
   return {
-    mode: 'cloud',
-    async list() {
-      const snap = await col.limit(1000).get();
-      const out = {};
-      snap.docs.forEach(d => { out[d.id] = JSON.parse(JSON.stringify(d.data())); });
-      return out;
-    },
+    mode: canWrite ? 'cloud' : 'cloud-view',
+    async list() { return toDocs(await col.limit(1000).get()); },
     async set(k, b) { await col.doc(k).set(b); },
-    async remove(k) { await col.doc(k).delete(); }
+    async remove(k) { await col.doc(k).delete(); },
+    watch(cb) { return col.limit(1000).onSnapshot(s => cb(toDocs(s)), () => { /* the next page load recovers */ }); }
   };
+}
+function lockedBackend() { return { mode: 'locked', async list() { return {}; }, async set() {}, async remove() {} }; }
+/* Earlier versions kept the ledger in the owner's private space. Copy it to the shared path once, then remove the old copy. */
+async function migratePrivate(db, id, shared) {
+  const priv = cloudBackend(db, 'data/users/' + id, true), old = await priv.list(), keys = Object.keys(old);
+  if (!keys.length) return null;
+  for (const k of keys) await shared.set(k, old[k]);
+  const check = await shared.list();
+  if (keys.every(k => check[k])) for (const k of keys) await priv.remove(k);
+  return check;
 }
 
 const Store = {
   backend: null, known: new Set(), timer: null, saving: false, state: 'saved', detail: '',
   async init() {
-    let backend = null;
-    try {
-      if (window.claude && window.claude.use) {
-        const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-        const id = db && user ? await user.id() : null;
-        if (db && id) backend = cloudBackend(db, id);
-      }
-    } catch (e) { backend = null; }
+    let backend = null, docs = null;
+    if (window.claude && window.claude.use) {
+      let db = null, user = null;
+      try { [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]); } catch (e) { /* capabilities unavailable */ }
+      const owner = user ? await user.isOwner() : false;
+      const id = db && user ? await user.id() : null;
+      if (db && id) {
+        backend = cloudBackend(db, SHARED_PATH, owner);
+        docs = await backend.list();
+        if (owner && !docs.meta) docs = (await migratePrivate(db, id, backend)) || docs;
+      } else if (!owner) backend = lockedBackend();
+    }
     if (!backend) { try { backend = lsBackend(); } catch (e) { backend = memBackend(); } }
     this.backend = backend;
-    const docs = await backend.list();
+    if (!docs) docs = await backend.list();
     this.known = new Set(Object.keys(docs));
     D = dataFromDocs(docs);
+    if (backend.mode === 'cloud-view') {
+      let first = true;
+      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); if (typeof render === 'function') render(); });
+    }
   },
   get mode() { return this.backend ? this.backend.mode : 'memory'; },
-  schedule() { this.setState('busy'); clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 450); },
+  get readonly() { return this.mode === 'cloud-view' || this.mode === 'locked'; },
+  schedule() { if (this.readonly) return; this.setState('busy'); clearTimeout(this.timer); this.timer = setTimeout(() => this.flush(), 450); },
   setState(s, detail = '') {
     this.state = s; this.detail = detail;
     const el = document.getElementById('saveState');
     if (el) el.replaceWith(saveChip());
   },
   async flush() {
-    if (this.saving || !this.backend) return;
+    if (this.saving || !this.backend || this.readonly) return;
     this.saving = true;
     let failed = null;
     while (dirty.size) {
@@ -502,7 +524,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 function saveChip() {
   const s = document.createElement('span');
   s.id = 'saveState';
-  const where = Store.mode === 'cloud' ? 'Saved to your private storage' : Store.mode === 'browser' ? 'Saved in this browser' : 'Not saved. Export a backup before closing';
+  if (Store.readonly) { s.className = 'save ro'; s.textContent = 'View only'; s.title = 'You can look at everything here but not change it'; return s; }
+  const where = Store.mode === 'cloud' ? 'Saved with this page on your Claude account' : Store.mode === 'browser' ? 'Saved in this browser' : 'Not saved. Export a backup before closing';
   s.className = 'save' + (Store.state === 'busy' ? ' busy' : Store.state === 'err' || Store.mode === 'memory' ? ' err' : '');
   s.textContent = Store.state === 'busy' ? 'Saving…' : Store.state === 'err' ? Store.detail : Store.mode === 'cloud' ? 'Saved' : where;
   s.title = where;
@@ -1122,6 +1145,7 @@ function autoCategoryFor(d, desc, amt) { const keep = D; D = d; const c = autoCa
 /* ---------- views ---------- */
 const UI = { tab: 'month', ym: thisMonth(), open: null, hidePaid: false, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
+const RO = () => Store.readonly;
 const ICON = {
   check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.6l3.1 3L12.8 4.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevL: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3.5L5.5 9l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1134,13 +1158,13 @@ const TABS = [['month', 'Month'], ['obligations', 'Obligations'], ['statements',
 
 function chromeHTML() {
   return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
-    <div class="top-r"><span id="saveState"></span><button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button></div>`;
+    <div class="top-r"><span id="saveState"></span>${RO() ? '' : `<button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button>`}</div>`;
 }
 function emptyState(title, text, buttons = '') {
   return `<div class="empty"><h3>${esc(title)}</h3><p>${text}</p><div class="actions" style="justify-content:center">${buttons}</div></div>`;
 }
 function sampleBanner() {
-  return D.sample ? `<div class="banner info"><span>You are looking at example data. Try everything, then clear it to start with your own.</span><button class="btn sm" data-act="clear-sample">Clear example data</button></div>` : '';
+  return D.sample && !RO() ? `<div class="banner info"><span>You are looking at example data. Try everything, then clear it to start with your own.</span><button class="btn sm" data-act="clear-sample">Clear example data</button></div>` : '';
 }
 const catOptions = (sel, cats = D.cats) => cats.map(c => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join('');
 
@@ -1155,7 +1179,7 @@ function viewMonth() {
     ${ym !== cur ? `<button class="btn sm" data-act="month-today">Back to ${fmtMonth(cur)}</button>` : ''}
   </div>`;
   if (!D.templates.length && !items.length) {
-    return nav + `<section class="card">${emptyState('Start with your monthly bills', 'List the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
+    return nav + `<section class="card">${RO() ? emptyState('Nothing here yet', 'Bills and income will appear here once they have been added.') : emptyState('Start with your monthly bills', 'List the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
       `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add a bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
@@ -1174,26 +1198,26 @@ function viewMonth() {
   const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
   const billsCard = `<section class="card">
     <div class="card-h"><h2>Bills</h2><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label></div>
-    ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.'}</p>`}
-    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span><button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button></div>
+    ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
+    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
   </section>`;
   const incCard = `<section class="card">
     <div class="card-h"><h2>Income</h2></div>
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
-    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button></div>
+    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button>'}</div>
   </section>
-  <p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>`;
+  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
   return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>`;
 }
 function rowHTML(it) {
-  const st = itemStatus(it), open = UI.open === it.key, verb = it.type === 'income' ? 'received' : 'paid';
-  const link = it.txn ? txnById(it.txn) : null;
+  const ro = RO(), st = itemStatus(it), open = UI.open === it.key && !ro, verb = it.type === 'income' ? 'received' : 'paid';
+  const link = it.txn ? txnById(it.txn) : null, dis = ro || it.skip, tag = ro ? 'div' : 'button';
   return `<li class="row ${st}">
-    <button class="chk" role="checkbox" aria-checked="${it.done}" data-act="toggle" data-key="${esc(it.key)}" aria-label="Mark ${esc(it.name)} ${verb}"${it.skip ? ' disabled' : ''}>${ICON.check}</button>
-    <button class="rmain" data-act="open" data-key="${esc(it.key)}" aria-expanded="${open}">
+    <button class="chk" role="checkbox" aria-checked="${it.done}"${dis ? ' disabled' : ` data-act="toggle" data-key="${esc(it.key)}"`} aria-label="${esc(it.name)} ${it.done ? verb : 'not ' + verb}">${ICON.check}</button>
+    <${tag} class="rmain"${ro ? '' : ` data-act="open" data-key="${esc(it.key)}" aria-expanded="${open}"`}>
       <span class="rname">${esc(it.name)}${it.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-      <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}</span>
-    </button>
+      <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}${ro && it.note ? `<span aria-hidden="true">·</span><span>${esc(it.note)}</span>` : ''}</span>
+    </${tag}>
     <span class="ramt">${money(it.amount)}</span>
     ${open ? detailHTML(it, link) : ''}
   </li>`;
@@ -1225,9 +1249,9 @@ function viewObligations() {
   const live = D.templates.filter(t => !t.end || t.end >= cur);
   const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
   const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
-  const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">Everything that repeats. Each month's checklist is built from this list, so add a bill once and it shows up every time it is due.</p></div>
-    <div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div></div>`;
-  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
+  const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
+    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div>'}</div>`;
+  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && t.anchor ? +t.anchor.slice(8, 10) : (t.day || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
   const byCat = {};
@@ -1252,11 +1276,12 @@ function viewObligations() {
 }
 function tmplRow(t) {
   const eq = t.freq !== 'monthly' ? `about ${money(monthlyEquiv(t))} / month` : '';
-  return `<button class="orow" data-act="edit-tmpl" data-id="${t.id}">
+  const tag = RO() ? 'div' : 'button';
+  return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
     <span class="rmeta"><span>${esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(t.amount)}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
-  </button>`;
+  </${tag}>`;
 }
 
 /* ----- Statements ----- */
@@ -1379,7 +1404,7 @@ function monthChart(by, W) {
 function viewSpending() {
   const head = `<div class="pagehead"><div><h1>Where the money goes</h1><p class="lede">Built from the statements you have added. Transfers are left out, and refunds reduce the category they belong to.</p></div>
     <label class="field" style="grid-auto-flow:column;align-items:center;gap:10px">Period<select class="inp sm" data-chg="range" style="min-width:150px">${RANGES.map(([v, l]) => `<option value="${v}"${UI.range === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>`;
-  if (!D.txns.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing to show yet', 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', '<button class="btn primary" data-act="tab" data-tab="statements">Add a statement</button>' + (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
+  if (!D.txns.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : '<button class="btn primary" data-act="tab" data-tab="statements">Add a statement</button>' + (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
   const { from, to } = rangeFor(UI.range), st = spendStats(from, to), months = Object.keys(st.byMonth);
   let act = months.filter(m => st.byMonth[m].in || st.byMonth[m].out);
   if (!act.length) act = months;
@@ -1387,7 +1412,7 @@ function viewSpending() {
   const label = first === last ? fmtMonth(first) : `${fmtMonth(first)} to ${fmtMonth(last)}`;
   const chartBy = {};
   months.slice(months.indexOf(first), months.indexOf(last) + 1).forEach(m => { chartBy[m] = st.byMonth[m]; });
-  if (!st.count) return sampleBanner() + head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', '<button class="btn" data-act="tab" data-tab="statements">Go to statements</button>')}</section>`;
+  if (!st.count) return sampleBanner() + head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : '<button class="btn" data-act="tab" data-tab="statements">Go to statements</button>')}</section>`;
   const net = r2(st.income - st.spent), active = act.length || 1;
   const cats = Object.entries(st.byCat).filter(([, v]) => Math.abs(v) >= .005).sort((a, b) => b[1] - a[1]);
   const pos = cats.filter(([, v]) => v > 0), maxC = pos.length ? pos[0][1] : 1;
@@ -1399,7 +1424,7 @@ function viewSpending() {
     <div class="stat"><div class="lbl">${net >= 0 ? 'Kept' : 'Overspent'}</div><div class="val${net < 0 ? ' neg' : ''}">${money(Math.abs(net))}</div><div class="sub">${st.income ? Math.round(net / st.income * 100) + '% of income' : 'no income lines'}</div></div>
     <div class="stat"><div class="lbl">Tracked bills</div><div class="val">${st.spent ? Math.round(st.tracked / st.spent * 100) : 0}%</div><div class="sub">${money(st.tracked)} matched to your list</div></div></div></section>`;
   const catCard = `<section class="card"><div class="card-h"><h2>By category</h2></div><div class="card-b">
-    ${shownCats.map(([c, v]) => `<button class="cbar" data-act="drill" data-cat="${esc(c)}" title="See ${esc(c)} transactions"><span class="nm">${esc(c)}</span><span class="bar"><i style="width:${Math.max(1.5, v / maxC * 100)}%"></i></span><span class="amt">${money(v)}<small>${Math.round(v / st.spent * 100)}%</small></span></button>`).join('')}
+    ${shownCats.map(([c, v]) => `<${RO() ? 'div' : 'button'} class="cbar"${RO() ? '' : ` data-act="drill" data-cat="${esc(c)}" title="See ${esc(c)} transactions"`}><span class="nm">${esc(c)}</span><span class="bar"><i style="width:${Math.max(1.5, v / maxC * 100)}%"></i></span><span class="amt">${money(v)}<small>${Math.round(v / st.spent * 100)}%</small></span></${RO() ? 'div' : 'button'}>`).join('')}
     ${rest.length ? `<div class="cbar"><span class="nm muted">${rest.length} smaller categories</span><span></span><span class="amt">${money(sum(rest, x => x[1]))}</span></div>` : ''}</div></section>`;
   const chartCard = act.length > 1 ? `<section class="card"><div class="card-h"><h2>Month by month</h2></div>
     <div class="legend"><span><i style="background:var(--s1)"></i>Money in</span><span><i style="background:var(--s2)"></i>Spent</span></div>
@@ -1407,7 +1432,7 @@ function viewSpending() {
     <details class="tv"><summary>View as table</summary><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Month</th><th class="r">Money in</th><th class="r">Spent</th><th class="r">Net</th></tr></thead><tbody>${Object.keys(chartBy).map(m => `<tr><td>${fmtMonth(m)}</td><td class="r num">${money(st.byMonth[m].in)}</td><td class="r num">${money(st.byMonth[m].out)}</td><td class="r num">${money(st.byMonth[m].in - st.byMonth[m].out, { sign: true })}</td></tr>`).join('')}</tbody></table></div></details></section>` : '';
   const merch = st.merchants.filter(m => m.total > 0).sort((a, b) => b.total - a.total).slice(0, 8);
   const merchCard = merch.length ? `<section class="card"><div class="card-h"><h2>Biggest merchants</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Merchant</th><th class="r">Visits</th><th class="r">Total</th></tr></thead><tbody>${merch.map(m => `<tr><td class="desc">${esc(titleCase(m.key))}</td><td class="r num">${m.n}</td><td class="r num">${money(m.total)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
-  UI.rec = detectRecurring();
+  UI.rec = RO() ? [] : detectRecurring();
   const recCard = UI.rec.length ? `<section class="card"><div class="card-h"><h2>Looks like a recurring bill</h2></div>
     <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not on your obligations list yet.</p>
     ${UI.rec.map((r, i) => `<div class="rec"><div><div class="rname">${esc(r.name)}</div><div class="rmeta"><span class="num">about ${money(r.amount)}</span><span aria-hidden="true">·</span><span>seen in ${r.months} months</span><span aria-hidden="true">·</span><span>${esc(r.cat)}</span></div></div><button class="btn sm" data-act="add-recurring" data-idx="${i}">Add as bill</button></div>`).join('')}</section>` : '';
@@ -1416,9 +1441,17 @@ function viewSpending() {
 
 /* ----- shell ----- */
 const VIEWS = { month: () => sampleBanner() + viewMonth(), obligations: viewObligations, statements: viewStatements, spending: viewSpending };
+const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'statements'));
 function render() {
   const tabs = $('#tabs');
-  tabs.innerHTML = TABS.map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${label}</button>`).join('');
+  if (Store.mode === 'locked') {
+    tabs.innerHTML = '';
+    $('#app').innerHTML = `<section class="card">${emptyState('Sign in to view this ledger', 'This page was shared with you. It loads once you are signed in to Claude with the account it was shared with.')}</section>`;
+    return;
+  }
+  if (!visibleTabs().some(([id]) => id === UI.tab)) UI.tab = 'month';
+  $('#top').innerHTML = chromeHTML();
+  tabs.innerHTML = visibleTabs().map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${label}</button>`).join('');
   $('#app').innerHTML = VIEWS[UI.tab]();
   const chip = $('#saveState');
   if (chip) chip.replaceWith(saveChip());
@@ -1685,11 +1718,12 @@ function finishImports() {
 /* ---------- settings and backup ---------- */
 const PROTECTED = new Set(['Income', 'Transfer', 'Other']);
 function openSettings() {
-  const where = Store.mode === 'cloud' ? 'Your data is saved to private storage on your Claude account, so it is the same on every device where you open this page.' : Store.mode === 'browser' ? 'Your data is saved in this browser only. Export a backup now and then, and before clearing browser data.' : 'Saving is unavailable in this browser. Export a backup before you close this page.';
+  const where = Store.mode === 'cloud' ? 'Your data is saved with this page on your Claude account, so it is the same on every device where you open it. Only you can change it.' : Store.mode === 'browser' ? 'Your data is saved in this browser only. Export a backup now and then, and before clearing browser data.' : 'Saving is unavailable in this browser. Export a backup before you close this page.';
   const cur = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'NZD', 'JPY', 'INR', 'MXN', 'CHF', 'SEK', 'ZAR'];
   const used = new Set([...D.txns.map(t => t.cat), ...D.templates.map(t => t.category)]);
   openModal(`${dlgHead('Settings and backup')}<div class="dlg-b">
     <div><h3 style="font-size:15px">Where your data lives</h3><p class="muted" style="font-size:14px;margin-top:4px">${where}</p></div>
+    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Obligations and Spending, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
     <label class="field">Currency<select data-chg="currency">${cur.map(c => `<option${D.settings.currency === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label>
     <div><h3 style="font-size:15px">Categories</h3><div class="actions" style="margin-top:8px">${D.cats.map(c => `<span class="pill">${esc(c)}${PROTECTED.has(c) || used.has(c) ? '' : ` <button type="button" class="btn ghost sm" style="min-height:0;padding:0 2px" data-act="cat-del" data-cat="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button>`}</span>`).join('')}</div>
       <div class="actions" style="margin-top:10px"><input class="inp sm" id="newcat" type="text" placeholder="New category" style="width:180px" autocomplete="off"><button type="button" class="btn sm" data-act="cat-add">Add</button></div></div>
@@ -1808,9 +1842,12 @@ const ACTIONS = {
   'imp-cancel-all': () => { closeModal(true); IM = null; IMQ = []; finishImports(); },
   'imp-row-flip': el => { const r = IM.rows[+el.dataset.i]; if (r) { r.amt = -r.amt; $('#impPrev').innerHTML = previewTable(); } }
 };
+const RO_OK = new Set(['tab', 'month-prev', 'month-next', 'month-today']);
+const RO_CHANGE = new Set(['hidepaid', 'range']);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
+  if (RO() && !RO_OK.has(el.dataset.act)) return;
   if (el.dataset.act !== 'del-import') UI.confirm = null;
   const h = ACTIONS[el.dataset.act];
   if (h) h(el, e);
@@ -1850,7 +1887,7 @@ const CHANGE = {
 };
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-chg]');
-  if (el && CHANGE[el.dataset.chg]) CHANGE[el.dataset.chg](el);
+  if (el && CHANGE[el.dataset.chg] && (!RO() || RO_CHANGE.has(el.dataset.chg))) CHANGE[el.dataset.chg](el);
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { UI.q = e.target.value; UI.txLimit = 100; $('#txnList').innerHTML = txnTable(); }
@@ -1869,10 +1906,11 @@ for (const ev of ['pointermove', 'pointerdown']) {
 document.addEventListener('scroll', hideTip, { passive: true });
 
 /* files: picker and drag-and-drop */
-$('#file').addEventListener('change', e => { const files = [...e.target.files]; e.target.value = ''; handleFiles(files); });
+$('#file').addEventListener('change', e => { if (RO()) return; const files = [...e.target.files]; e.target.value = ''; handleFiles(files); });
 document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); const d = $('#drop'); if (d) d.classList.add('over'); } });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) { const d = $('#drop'); if (d) d.classList.remove('over'); } });
 document.addEventListener('drop', e => {
+  if (RO()) return;
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); const d = $('#drop'); if (d) d.classList.remove('over'); handleFiles(e.dataTransfer.files); }
 });
 
@@ -1885,9 +1923,11 @@ async function main() {
   $('#saveState').replaceWith(saveChip());
   $('#app').innerHTML = '<div class="empty"><p>Loading your ledger…</p></div>';
   await Store.init();
+  $('#top').innerHTML = chromeHTML();
+  $('#saveState').replaceWith(saveChip());
   const hash = location.hash.slice(1);
   let saved = null; try { saved = localStorage.getItem('billledger.tab'); } catch (e) { /* ignore */ }
-  const pick = [hash, saved].find(t => TABS.some(x => x[0] === t));
+  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === t));
   if (pick) UI.tab = pick;
   render();
 }
