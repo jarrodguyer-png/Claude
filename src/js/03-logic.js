@@ -98,6 +98,12 @@ function setDueDate(ym, it, newDate, onlyThisMonth) {
   if (mo && mo.entries[nk] && mo.entries[nk].due) { delete mo.entries[nk].due; touchMonth(ym); }
   return { undo, day, key: nk };
 }
+/* the paycheck typed into the Planner for a month */
+function setPlan(ym, amount, source) {
+  const mo = ensureMonth(ym);
+  if (amount > 0) mo.plan = { amount: r2(amount), ...(source ? { source } : {}) }; else delete mo.plan;
+  touchMonth(ym);
+}
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
@@ -154,7 +160,7 @@ function summarize(items) {
   const budgetPlan = sum(budgets, i => Math.max(i.amount, i.spent)), budgetSpent = sum(budgets, i => i.spent), budgetLeft = sum(budgets, i => Math.max(0, i.amount - i.spent));
   const billsTotal = r2(fixedTotal + budgetPlan), billsPaid = r2(fixedPaid + budgetSpent);
   const incomeTotal = sum(inc, i => i.amount), incomeGot = sum(inc.filter(i => i.done), i => i.amount);
-  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
+  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot };
 }
 function dueText(item) {
   const diff = dayNum(item.due) - dayNum(todayStr());
@@ -413,6 +419,7 @@ function loadSample() {
     d.months[ym] = d.months[ym] || { entries: {}, extras: [], spends: [] };
     list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
   });
+  d.months[cur].plan = { amount: 2150, source: 'Paycheck' };
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);

@@ -25,6 +25,9 @@ const ACTIONS = {
   open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
   'edit-item': el => openItemDialog(el.dataset.key),
   'add-menu': () => openAddMenu(),
+  'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
+  'plan-clear': () => { setPlan(UI.ym, 0); render(); },
+  'plan-log': () => { const p = D.months[UI.ym] && D.months[UI.ym].plan; if (p) recordIncome(p.source || 'Paycheck', p.amount, entryDate(UI.ym)); },
   'add-bill': () => openAddBill(),
   'del-tmpl': el => askDeleteTemplate(el.dataset.id),
   'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
@@ -154,6 +157,12 @@ document.addEventListener('submit', e => {
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
   else if (e.target.classList.contains('incf')) submitIncome(e.target);
+  else if (e.target.classList.contains('planf')) {
+    const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
+    if (isNaN(a) || a <= 0) { toast('Enter the amount you were paid.'); return; }
+    setPlan(UI.ym, a, prev && prev.amount === r2(a) ? prev.source : '');
+    render();
+  }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

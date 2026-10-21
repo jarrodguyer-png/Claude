@@ -211,6 +211,22 @@ details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-
 .incf input[name=source] { flex: 2 1 150px; }
 .incf input[name=amount] { flex: 1 1 100px; max-width: 140px; }
 .incf input[name=date] { flex: 0 1 150px; }
+/* check planner */
+.planf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
+.planf .inp { width: auto; flex: 1 1 160px; max-width: 240px; min-width: 0; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 0 18px 16px; font-size: 13.5px; }
+.chip { border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 5px 12px; font-weight: 600; font-size: 13.5px; }
+.chip:hover { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 11px 18px; border-top: 1px solid var(--line-2); }
+.ptxt { display: grid; gap: 1px; min-width: 0; }
+.pright { display: grid; justify-items: end; gap: 1px; }
+.pright .ramt { font-weight: 500; }
+.pbal { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.pbal.neg { color: var(--bad); font-weight: 600; }
+.neg-t { color: var(--bad); font-weight: 600; }
+.prow.late .due { color: var(--bad); font-weight: 600; }
+.prow.soon .due { color: var(--warn); font-weight: 600; }
+
 /* forms */
 .field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }
 .field input, .field select, .field textarea, .inp {
@@ -381,7 +397,8 @@ function moneyShort(n) {
 /* ---------- data model ----------
    templates : recurring bills and income (the "monthly obligations")
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
-                 spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
+                 spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
+                 plan: {amount, source?} }                         (the paycheck typed into the Planner tab)
    a template with budget:true is a monthly spending limit rather than a fixed payment
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
@@ -417,11 +434,11 @@ const dirty = new Set();
 const touchMeta = () => { dirty.add('meta'); Store.schedule(); };
 const touchMonth = ym => { dirty.add('m_' + ym); Store.schedule(); };
 const touchTxns = ym => { dirty.add('t_' + ym); Store.schedule(); };
-const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length);
+const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length || mo.plan);
 
 function buildDoc(key) {
   if (key === 'meta') return { v: 1, settings: D.settings, templates: D.templates, rules: D.rules, cats: D.cats, imports: D.imports, sample: D.sample };
-  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [] } : null; }
+  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [], ...(mo.plan ? { plan: mo.plan } : {}) } : null; }
   if (key.startsWith('t_')) { const ym = key.slice(2); const list = D.txns.filter(t => ymOf(t.date) === ym); return list.length ? { list } : null; }
   return null;
 }
@@ -443,7 +460,7 @@ function dataFromDocs(docs) {
     d.sample = !!meta.sample;
   }
   for (const [k, v] of Object.entries(docs)) {
-    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [] };
+    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [], ...(v.plan ? { plan: v.plan } : {}) };
     else if (k.startsWith('t_')) d.txns.push(...(v.list || []));
   }
   d.txns.sort((a, b) => a.date.localeCompare(b.date));
@@ -955,6 +972,12 @@ function setDueDate(ym, it, newDate, onlyThisMonth) {
   if (mo && mo.entries[nk] && mo.entries[nk].due) { delete mo.entries[nk].due; touchMonth(ym); }
   return { undo, day, key: nk };
 }
+/* the paycheck typed into the Planner for a month */
+function setPlan(ym, amount, source) {
+  const mo = ensureMonth(ym);
+  if (amount > 0) mo.plan = { amount: r2(amount), ...(source ? { source } : {}) }; else delete mo.plan;
+  touchMonth(ym);
+}
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
@@ -1011,7 +1034,7 @@ function summarize(items) {
   const budgetPlan = sum(budgets, i => Math.max(i.amount, i.spent)), budgetSpent = sum(budgets, i => i.spent), budgetLeft = sum(budgets, i => Math.max(0, i.amount - i.spent));
   const billsTotal = r2(fixedTotal + budgetPlan), billsPaid = r2(fixedPaid + budgetSpent);
   const incomeTotal = sum(inc, i => i.amount), incomeGot = sum(inc.filter(i => i.done), i => i.amount);
-  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
+  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot };
 }
 function dueText(item) {
   const diff = dayNum(item.due) - dayNum(todayStr());
@@ -1270,6 +1293,7 @@ function loadSample() {
     d.months[ym] = d.months[ym] || { entries: {}, extras: [], spends: [] };
     list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
   });
+  d.months[cur].plan = { amount: 2150, source: 'Paycheck' };
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);
@@ -1295,7 +1319,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['bills', 'Bills'], ['bank', 'Bank']];
+const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bills', 'Bills'], ['bank', 'Bank']];
 
 function chromeHTML() {
   return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
@@ -1310,15 +1334,19 @@ function sampleBanner() {
 const catOptions = (sel, cats = D.cats) => cats.map(c => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join('');
 
 /* ----- Month ----- */
-function viewMonth() {
-  const ym = UI.ym, cur = thisMonth(), items = itemsFor(ym), S = summarize(items), ro = RO();
-  const nav = `<div class="monthbar">
+function monthNav(ym) {
+  const cur = thisMonth();
+  return `<div class="monthbar">
     <button class="icon-btn" data-act="month-prev" aria-label="Previous month">${ICON.chevL}</button>
     <h1 class="mtitle">${fmtMonth(ym)}</h1>
     <button class="icon-btn" data-act="month-next" aria-label="Next month">${ICON.chevR}</button>
     <span class="grow"></span>
     ${ym !== cur ? `<button class="btn sm" data-act="month-today">Back to ${fmtMonth(cur)}</button>` : ''}
   </div>`;
+}
+function viewMonth() {
+  const ym = UI.ym, cur = thisMonth(), items = itemsFor(ym), S = summarize(items), ro = RO();
+  const nav = monthNav(ym);
   if (!D.templates.length && !items.length) {
     return nav + `<section class="card">${ro ? emptyState('Nothing here yet', 'Bills and income will appear here once they have been added.') : emptyState('Start with your monthly bills', 'Add the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
       `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add a bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
@@ -1328,10 +1356,9 @@ function viewMonth() {
   const over = S.budgets.filter(i => i.spent > i.amount + 0.005);
   const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
-    <div class="stats three">
+    <div class="stats">
       <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(openBills, 'bill')} left${S.budgetLeft > 0 ? ` + ${money(S.budgetLeft)} to spend` : ''}</div></div>
       <div class="stat"><div class="lbl">Income</div><div class="val">${money(S.incomeGot)}</div><div class="sub">of ${money(S.incomeTotal)} expected</div></div>
-      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">income minus bills and budgets</div></div>
     </div>
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
@@ -1397,6 +1424,39 @@ function rowHTML(it) {
       <span class="ramt">${money(it.amount)}</span>
     </${tag}>
   </li>`;
+}
+
+/* ----- Planner: type in a paycheck and see what is left to pay and what is left over ----- */
+function planRow(name, sub, cls, amount, bal) {
+  return `<li class="prow ${cls}"><span class="ptxt"><span class="rname">${esc(name)}</span><span class="rmeta"><span class="due">${esc(sub)}</span></span></span>
+    <span class="pright"><span class="ramt">${money(amount)}</span>${bal === null ? '' : `<span class="pbal num${bal < 0 ? ' neg' : ''}">${bal < 0 ? 'short ' + money(-bal) : money(bal) + ' left'}</span>`}</span></li>`;
+}
+function viewPlanner() {
+  const ym = UI.ym, items = itemsFor(ym), plan = (D.months[ym] && D.months[ym].plan) || null;
+  const pay = plan && plan.amount > 0 ? plan.amount : 0, has = pay > 0;
+  const bills = items.filter(i => i.type === 'bill' && !i.budget && !i.done && !i.skip);
+  const buds = items.filter(i => i.budget).map(b => ({ b, left: Math.max(0, r2(b.amount - b.spent)) })).filter(x => x.left > 0);
+  const billsTotal = sum(bills, i => i.amount), budTotal = sum(buds, x => x.left), toPay = r2(billsTotal + budTotal), over = r2(pay - toPay);
+  const expected = items.filter(i => i.type === 'income' && i.rec && !i.done && !i.skip).slice(0, 3);
+  const chips = expected.length ? `<div class="chips"><span class="muted">Expecting</span>${expected.map(i => `<button type="button" class="chip" data-act="plan-use" data-amt="${i.amount}" data-name="${esc(i.name)}">${esc(i.name)} ${money(i.amount)}</button>`).join('')}</div>` : '';
+  let bal = pay;
+  const billRows = bills.map(i => { bal = r2(bal - i.amount); return planRow(i.name, dueText(i), itemStatus(i), i.amount, has ? bal : null); }).join('');
+  const budRows = buds.map(x => { bal = r2(bal - x.left); return planRow(x.b.name, 'left to spend this month', 'budget', x.left, has ? bal : null); }).join('');
+  const form = `<section class="card"><div class="card-h"><div><h2>This paycheck</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Enter what you got paid. Bills still unpaid this month come out of it in due-date order.</p></div></div>
+    <form class="planf" autocomplete="off">
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Paycheck amount" aria-label="Paycheck amount" value="${has ? pay : ''}" required>
+      <button class="btn primary" type="submit">${has ? 'Update' : 'Plan it'}</button>
+      ${has ? '<button type="button" class="btn" data-act="plan-log">Log it as income</button><button type="button" class="btn ghost" data-act="plan-clear">Clear</button>' : ''}
+    </form>${chips}</section>`;
+  const stats = `<section class="card"><div class="stats three">
+    <div class="stat"><div class="lbl">Paycheck</div><div class="val">${has ? money(pay) : '—'}</div><div class="sub">${has ? 'entered above' : 'enter one above'}</div></div>
+    <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(toPay)}</div><div class="sub">${plural(bills.length, 'bill')}${budTotal > 0 ? ` + ${money(budTotal)} to spend` : ''}</div></div>
+    <div class="stat"><div class="lbl">Left over</div><div class="val${has && over < 0 ? ' neg' : ''}">${has ? money(over) : '—'}</div><div class="sub">${has ? (over < 0 ? 'short after everything below' : 'after everything below') : 'after you enter a paycheck'}</div></div></div></section>`;
+  const list = (bills.length || buds.length) ? `<section class="card"><div class="card-h"><h2>What is left to pay in ${fmtMonth(ym)}</h2></div>
+    <ul class="list">${billRows}${budRows ? `<li class="grp">Still to spend</li>${budRows}` : ''}</ul>
+    <div class="card-f"><span class="total num">Total ${money(toPay)}</span>${has ? `<span class="num ${over < 0 ? 'neg-t' : 'muted'}" style="font-size:13px">${over < 0 ? 'Short ' + money(-over) : money(over) + ' left over'}</span>` : ''}</div></section>`
+    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan a paycheck.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="bills">Add bills</button>')}</section>`;
+  return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
 }
 
 /* ----- Bills (everything that repeats) ----- */
@@ -1593,8 +1653,8 @@ function viewSpending() {
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), bills: viewBills, bank: viewBank };
-const visibleTabs = () => TABS;
+const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, bills: viewBills, bank: viewBank };
+const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'planner'));
 function render() {
   const tabs = $('#tabs');
   if (Store.mode === 'locked') {
@@ -1902,8 +1962,8 @@ function submitSpend(f) {
   if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
 }
 /* quick income entry: ticks off a matching expected paycheck, otherwise records a one-off */
-function submitIncome(f) {
-  const name = f.elements.source.value.trim(), amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr();
+function submitIncome(f) { recordIncome(f.elements.source.value.trim(), parseFloat(f.elements.amount.value), f.elements.date.value || todayStr()); }
+function recordIncome(name, amount, date) {
   if (!name || isNaN(amount) || amount <= 0) { toast('Enter a source and an amount.'); return; }
   const ym = ymOf(date), got = r2(amount), received = date <= todayStr();
   const near = i => Math.abs(dayNum(i.due) - dayNum(date));
@@ -2098,6 +2158,9 @@ const ACTIONS = {
   open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
   'edit-item': el => openItemDialog(el.dataset.key),
   'add-menu': () => openAddMenu(),
+  'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
+  'plan-clear': () => { setPlan(UI.ym, 0); render(); },
+  'plan-log': () => { const p = D.months[UI.ym] && D.months[UI.ym].plan; if (p) recordIncome(p.source || 'Paycheck', p.amount, entryDate(UI.ym)); },
   'add-bill': () => openAddBill(),
   'del-tmpl': el => askDeleteTemplate(el.dataset.id),
   'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
@@ -2227,6 +2290,12 @@ document.addEventListener('submit', e => {
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
   else if (e.target.classList.contains('incf')) submitIncome(e.target);
+  else if (e.target.classList.contains('planf')) {
+    const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
+    if (isNaN(a) || a <= 0) { toast('Enter the amount you were paid.'); return; }
+    setPlan(UI.ym, a, prev && prev.amount === r2(a) ? prev.source : '');
+    render();
+  }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

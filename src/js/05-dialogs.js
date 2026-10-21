@@ -290,8 +290,8 @@ function submitSpend(f) {
   if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
 }
 /* quick income entry: ticks off a matching expected paycheck, otherwise records a one-off */
-function submitIncome(f) {
-  const name = f.elements.source.value.trim(), amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr();
+function submitIncome(f) { recordIncome(f.elements.source.value.trim(), parseFloat(f.elements.amount.value), f.elements.date.value || todayStr()); }
+function recordIncome(name, amount, date) {
   if (!name || isNaN(amount) || amount <= 0) { toast('Enter a source and an amount.'); return; }
   const ym = ymOf(date), got = r2(amount), received = date <= todayStr();
   const near = i => Math.abs(dayNum(i.due) - dayNum(date));

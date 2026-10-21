@@ -3,6 +3,7 @@
 A small web app for tracking monthly bills and income, ticking things off as they are paid, and checking them against bank statements.
 
 - **Month**: this month's checklist, built from your recurring list. Tick a bill off and it moves into a Done group. Tap any bill or income row to change its amount or due date in one sheet, either for this and the following months or for this month only. Earlier months keep what they had. Log income in one line (source, amount, date); a source that matches an expected paycheck ticks it off. Spending budgets (like groceries) keep a running total of what you enter against a monthly limit and turn red when you go over.
+- **Planner**: type in a paycheck and see the unpaid bills for the month in due-date order, what is left of the check after each one, what you still have to pay, and what is left over. **Log it as income** records the check (and ticks off a matching expected paycheck). Hidden from view-only viewers.
 - **Bills**: the list of everything that repeats (monthly, twice a month, every 2 weeks, weekly, quarterly, twice a year, yearly). **+ Add** creates a bill, income or a spending budget. Category, start and end months and statement text live under More options.
 - **Bank**: add CSV, OFX/QFX or PDF statements. Spending shows where the money went by category and month, Reconcile matches bills to statement lines (review, then apply), Transactions lists every line, Files lists what you imported.
 
