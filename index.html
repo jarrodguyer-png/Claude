@@ -161,6 +161,10 @@ button { cursor: pointer; }
 .rname { font-weight: 600; overflow-wrap: anywhere; }
 .rmeta { font-size: 13px; color: var(--ink-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ramt { font-family: var(--f-data); font-variant-numeric: tabular-nums; font-weight: 500; text-align: right; white-space: nowrap; }
+.ramt.edit { background: none; border: 0; border-bottom: 1px dashed var(--muted); border-radius: 0; padding: 4px 0 2px; display: inline-flex; gap: 6px; align-items: center; color: inherit; }
+.ramt.edit svg { color: var(--muted); flex: none; }
+.ramt.edit:hover { border-bottom-color: var(--accent); }
+.ramt.edit:hover svg { color: var(--accent); }
 .row.paid .rname, .row.paid .ramt { color: var(--muted); }
 .row.paid .rname { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .row.skip .rname, .row.skip .ramt { color: var(--muted); font-style: italic; }
@@ -191,6 +195,20 @@ button { cursor: pointer; }
 .entries .enote { overflow-wrap: anywhere; color: var(--ink-2); }
 .entries .btn { min-height: 30px; padding: 0 8px; }
 .bentries { display: grid; gap: 2px; }
+
+/* quick income entry, and the phone order: budgets, income, then bills */
+.incf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
+.incf .inp { width: auto; min-width: 0; }
+.incf input[name=source] { flex: 2 1 150px; }
+.incf input[name=amount] { flex: 1 1 100px; max-width: 140px; }
+.incf input[name=date] { flex: 0 1 150px; }
+@media (max-width: 899px) {
+  .cols .stack { display: contents; }
+  .cols .c-bud { order: 1; }
+  .cols .c-inc { order: 2; }
+  .cols .c-bills { order: 3; }
+  .cols .c-note { order: 4; }
+}
 
 /* forms */
 .field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }
@@ -363,6 +381,7 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
    a template with budget:true is a monthly spending limit rather than a fixed payment
+   template.amount is the starting amount; template.changes [{from:'YYYY-MM',amount}] holds later changes, so past months keep the amount they had
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -374,7 +393,7 @@ let D = emptyData();
 
 const FREQ = { monthly: 'Monthly', twice: 'Twice a month', biweekly: 'Every 2 weeks', weekly: 'Every week', quarterly: 'Every 3 months', semiannual: 'Every 6 months', yearly: 'Once a year' };
 const PER_YEAR = { monthly: 12, twice: 24, biweekly: 26, weekly: 52, quarterly: 4, semiannual: 2, yearly: 1 };
-const monthlyEquiv = t => t.amount * PER_YEAR[t.freq] / 12;
+const monthlyEquiv = t => amountFor(t, thisMonth()) * PER_YEAR[t.freq] / 12;
 function freqText(t) {
   switch (t.freq) {
     case 'monthly': return `Monthly on the ${ord(t.day)}`;
@@ -853,14 +872,24 @@ function occurrences(t, ym) {
     default: return [clampDay(ym, t.day)];
   }
 }
+/* the planned amount of a recurring item in a given month, honouring later changes */
+function amountFor(t, ym) { let a = t.amount; for (const c of t.changes || []) if (c.from <= ym) a = c.amount; return a; }
+/* change the amount from a month onward; earlier months keep what they had */
+function setAmountFrom(t, ym, amount) {
+  const keep = (t.changes || []).filter(c => c.from < ym);
+  if (t.start && ym <= t.start && !keep.length) { t.amount = amount; delete t.changes; return; }
+  const before = keep.length ? keep[keep.length - 1].amount : t.amount;
+  if (amount !== before) keep.push({ from: ym, amount });
+  if (keep.length) t.changes = keep; else delete t.changes;
+}
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
   const items = [];
   for (const t of D.templates) {
     for (const due of occurrences(t, ym)) {
-      const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {};
-      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
+      const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {}, base = amountFor(t, ym);
+      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: base, amount: e.amount ?? base, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
     }
   }
   for (const x of (mo && mo.extras) || []) {
@@ -1182,11 +1211,14 @@ function autoCategoryFor(d, desc, amt) { const keep = D; D = d; const c = autoCa
 const UI = { tab: 'month', ym: thisMonth(), open: null, hidePaid: false, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
+/* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
+const entryDate = ym => { const cur = thisMonth(); return ym === cur ? todayStr() : ym < cur ? `${ym}-${pad(daysIn(ym))}` : `${ym}-01`; };
 const ICON = {
   check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8.6l3.1 3L12.8 4.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevL: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3.5L5.5 9l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   chevR: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7 3.5L12.5 9 7 14.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   gear: '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 6.8a3.2 3.2 0 100 6.4 3.2 3.2 0 000-6.4zm7 3.2l-1.6-.9a5.8 5.8 0 000-2.2l1.5-1-1.6-2.7-1.7.8a6 6 0 00-1.9-1.1L11 1.3H8l-.5 1.8a6 6 0 00-1.9 1.1l-1.7-.8-1.6 2.7 1.5 1a5.8 5.8 0 000 2.2L2.9 10l1.6 2.8 1.7-.8c.6.5 1.2.8 1.9 1.1l.4 1.8h3l.5-1.8c.7-.3 1.3-.6 1.9-1.1l1.7.8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  pencil: '<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 12l.6-2.9L9.4 2.3a1.3 1.3 0 011.8 0l.5.5a1.3 1.3 0 010 1.8L4.9 11.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -1234,19 +1266,28 @@ function viewMonth() {
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
   const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
-  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Spending budgets</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter each purchase. The bar turns red if you go over.</p>'}</div></div>
+  const budgetCard = buds.length ? `<section class="card c-bud"><div class="card-h"><div><h2>Spending budgets</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter amounts as you spend them. The bar turns red if you go over.</p>'}</div></div>
     <ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
-  const billsCard = `<section class="card">
-    <div class="card-h"><h2>Bills</h2><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label></div>
+  const billsCard = `<section class="card c-bills">
+    <div class="card-h"><div><h2>Bills</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap an amount to change it. Tap a name for more.</p>'}</div>
+      <div class="actions"><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label>${RO() ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div></div>
     ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
-    <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
+    <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span></div>
   </section>`;
-  const incCard = `<section class="card">
-    <div class="card-h"><h2>Income</h2></div>
+  const incNames = [...new Set([...D.templates.filter(t => t.type === 'income').map(t => t.name), ...Object.values(D.months).flatMap(m => m.extras.filter(x => x.type === 'income').map(x => x.name))])].slice(0, 30);
+  const incForm = RO() ? '' : `<form class="incf" autocomplete="off">
+      <input name="source" class="inp" list="incsrc" placeholder="Source, e.g. Salary" aria-label="Income source" required>
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount received" required>
+      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date received">
+      <button class="btn primary sm" type="submit">Add income</button>
+      <datalist id="incsrc">${incNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist></form>`;
+  const incCard = `<section class="card c-inc">
+    <div class="card-h"><div><h2>Income</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives. A source that matches an expected paycheck ticks it off.</p>'}</div></div>
+    ${incForm}
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
-    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button>'}</div>
+    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
   </section>
-  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
+  ${RO() ? '' : '<p class="muted c-note" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
   return nav + summary + `<div class="cols"><div class="stack">${budgetCard}${billsCard}</div><div class="stack">${incCard}</div></div>`;
 }
 /* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
@@ -1256,7 +1297,7 @@ function budgetHTML(b, ym) {
   const state = over ? 'over' : pct >= 85 ? 'near' : 'ok', left = r2(b.amount - b.spent);
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
   const expanded = ro || UI.open === b.key;
-  const defDate = ym === cur ? todayStr() : ym < cur ? `${ym}-${pad(daysIn(ym))}` : `${ym}-01`;
+  const defDate = entryDate(ym);
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
   return `<li class="brow ${state}">
     <div class="bhead"><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">of ${money(b.amount)}</span></span></div>
@@ -1281,7 +1322,7 @@ function rowHTML(it) {
       <span class="rname">${esc(it.name)}${it.autopay ? '<span class="tag">Auto</span>' : ''}</span>
       <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}${ro && it.note ? `<span aria-hidden="true">·</span><span>${esc(it.note)}</span>` : ''}</span>
     </${tag}>
-    <span class="ramt">${money(it.amount)}</span>
+    ${ro ? `<span class="ramt">${money(it.amount)}</span>` : `<button class="ramt edit" data-act="open" data-focus="amount" data-key="${esc(it.key)}" aria-label="Change the amount for ${esc(it.name)}">${money(it.amount)}${ICON.pencil}</button>`}
     ${open ? detailHTML(it, link) : ''}
   </li>`;
 }
@@ -1295,13 +1336,13 @@ function detailHTML(it, link) {
   }
   return `<div class="detail">
     <div class="fgrid">
-      <label class="field">Amount this month<input class="num" type="number" step="0.01" min="0" value="${it.amount}" data-chg="amount" data-key="${k}"></label>
+      <label class="field">This month's amount<input class="num" type="number" step="0.01" min="0" value="${it.amount}" data-chg="amount" data-key="${k}"></label>
       ${it.done ? `<label class="field">${verb} on<input type="date" value="${esc(it.doneDate || it.due)}" data-chg="paiddate" data-key="${k}"></label>` : ''}
       <label class="field">Note<input type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" data-chg="note" data-key="${k}"></label>
     </div>
     ${linkBlock}
     <div class="actions">
-      ${it.rec ? `<button class="btn sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit recurring ${it.type}…</button><button class="btn sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button>` : `<button class="btn sm danger" data-act="del-extra" data-key="${k}">Delete this item</button>`}
+      ${it.rec ? `<button class="btn sm" data-act="edit-amount" data-id="${it.tmpl.id}">Change amount from now on…</button><button class="btn sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit ${it.type === 'income' ? 'income' : 'bill'}…</button><button class="btn sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button class="btn sm danger" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button class="btn sm danger" data-act="del-extra" data-key="${k}">Delete this item</button>`}
     </div>
   </div>`;
 }
@@ -1343,7 +1384,7 @@ function tmplRow(t) {
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
     <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
-    <span><span class="ramt">${money(t.amount)}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
+    <span><span class="ramt">${money(amountFor(t, thisMonth()))}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
 
@@ -1590,16 +1631,19 @@ function tmplFields(v) {
   return out.join('');
 }
 let TF = null;
-function openTemplateDialog(id, preset = {}) {
+function openTemplateDialog(id, preset = {}, opts = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
   TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
+  TF.ctx = preset.ctx || (UI.tab === 'month' ? UI.ym : thisMonth());
+  if (t) TF.amount = amountFor(t, TF.ctx);
   const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
   openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
     <div class="dlg-b">
       <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
         <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
+      ${t ? `<label class="field">Apply a new amount to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount.</small></label>` : ''}
       <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
         ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
       ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
@@ -1610,11 +1654,8 @@ function openTemplateDialog(id, preset = {}) {
     </div>
     <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
   if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
-  if (t) $('#tf-del').onclick = e => {
-    const b = e.currentTarget;
-    if (b.dataset.sure) { D.templates = D.templates.filter(x => x.id !== t.id); touchMeta(); closeModal(true); render(); toast(`Deleted ${t.name}.`); return; }
-    b.dataset.sure = '1'; b.textContent = 'Remove from every month?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Delete'; } }, 4000);
-  };
+  if (t) $('#tf-del').onclick = () => askDeleteTemplate(t.id);
+  if (opts.focus) { const f = $('#tf-' + opts.focus); if (f) { f.focus(); if (f.select) f.select(); } }
 }
 function readTmplForm(soft) {
   const g = id => { const el = $('#' + id); return el ? el.value : undefined; };
@@ -1629,6 +1670,7 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
+  if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
@@ -1643,7 +1685,14 @@ function submitTemplate() {
   if (!obj.autopay) delete obj.autopay;
   if (TF.budget) obj.budget = true;
   let t;
-  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k]; Object.assign(t, obj); }
+  if (TF.editing) {
+    t = D.templates.find(x => x.id === TF.id);
+    const prev = amountFor(t, TF.ctx), next = obj.amount;
+    delete obj.amount;
+    for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k];
+    Object.assign(t, obj);
+    if (next !== prev) { if (TF.apply === 'all') { t.amount = next; delete t.changes; } else setAmountFrom(t, TF.ctx, next); }
+  }
   else { t = { id: uid('b'), ...obj }; D.templates.push(t); }
   touchMeta();
   const link = TF.linkTxn && txnById(TF.linkTxn);
@@ -1651,6 +1700,51 @@ function submitTemplate() {
   if (link) { const it = itemsFor(ymOf(link.date)).find(i => i.tmpl && i.tmpl.id === t.id); if (it) linkItem(ymOf(link.date), it, link); }
   render();
   toast(TF.editing ? 'Saved.' : `Added ${t.name}.`);
+}
+
+/* ---------- add / remove from the Month tab ---------- */
+function openAddBill() {
+  openModal(`${dlgHead('Add a bill')}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="add-tmpl" data-type="bill">Every month, or another schedule</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Rent, utilities, subscriptions. It shows up every time it is due.</p>
+    <button type="button" class="btn" data-act="add-extra" data-type="bill">Just this month (${esc(fmtMonth(UI.ym))})</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">A one-off, like a repair or a registration fee.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
+}
+function askDeleteTemplate(id) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const ym = UI.tab === 'month' ? UI.ym : thisMonth();
+  openModal(`${dlgHead(`Remove ${esc(t.name)}?`)}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="tmpl-stop" data-id="${esc(id)}" data-ym="${ym}">Stop it from ${esc(fmtMonth(ym))} on</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Keeps ${esc(fmtMonth(addMonths(ym, -1)))} and earlier exactly as they are, including what you ticked off.</p>
+    <button type="button" class="btn danger" data-act="tmpl-delete" data-id="${esc(id)}">Delete from every month</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">Also erases earlier months for this item, including payments you ticked off.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
+}
+function stopTemplate(id, ym) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const prevEnd = t.end, end = addMonths(ym, -1);
+  if (t.start && end < t.start) { deleteTemplate(id); return; } // it never applied before this month
+  t.end = end; touchMeta(); closeModal(true); UI.open = null; render();
+  toast(`${t.name} stops from ${fmtMonth(ym)}.`, { action: 'Undo', fn: () => { if (prevEnd) t.end = prevEnd; else delete t.end; touchMeta(); render(); }, ms: 8000 });
+}
+function deleteTemplate(id) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const snap = { t, idx: D.templates.indexOf(t), entries: {}, spends: {} };
+  D.templates = D.templates.filter(x => x.id !== id); touchMeta();
+  for (const [ym, mo] of Object.entries(D.months)) {
+    const ent = Object.entries(mo.entries).filter(([k]) => k.startsWith(id + '@')), sp = (mo.spends || []).filter(s => s.t === id);
+    if (!ent.length && !sp.length) continue;
+    snap.entries[ym] = Object.fromEntries(ent); snap.spends[ym] = sp;
+    ent.forEach(([k]) => { delete mo.entries[k]; });
+    mo.spends = (mo.spends || []).filter(s => s.t !== id); touchMonth(ym);
+  }
+  closeModal(true); UI.open = null; render();
+  toast(`Deleted ${t.name}.`, { ms: 9000, action: 'Undo', fn: () => {
+    D.templates.splice(Math.min(snap.idx, D.templates.length), 0, snap.t); touchMeta();
+    for (const ym of new Set([...Object.keys(snap.entries), ...Object.keys(snap.spends)])) { const mo = ensureMonth(ym); Object.assign(mo.entries, snap.entries[ym] || {}); mo.spends.push(...(snap.spends[ym] || [])); touchMonth(ym); }
+    render();
+  } });
 }
 
 /* ---------- one-off bill or income for a single month ---------- */
@@ -1685,6 +1779,28 @@ function submitSpend(f) {
   render();
   if (ym !== UI.ym) toast(`Added to ${fmtMonth(ym)}.`);
   if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
+}
+/* quick income entry: ticks off a matching expected paycheck, otherwise records a one-off */
+function submitIncome(f) {
+  const name = f.elements.source.value.trim(), amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr();
+  if (!name || isNaN(amount) || amount <= 0) { toast('Enter a source and an amount.'); return; }
+  const ym = ymOf(date), got = r2(amount), received = date <= todayStr();
+  const near = i => Math.abs(dayNum(i.due) - dayNum(date));
+  const expected = received ? itemsFor(ym).filter(i => i.type === 'income' && i.rec && !i.done && !i.skip && normText(i.name) === normText(name) && near(i) <= 12).sort((a, b) => near(a) - near(b))[0] : null;
+  const where = ym !== UI.ym ? ` in ${fmtMonth(ym)}` : '';
+  const again = () => { if (!matchMedia('(pointer: coarse)').matches) { const n = $('.incf input[name=source]'); if (n) n.focus(); } };
+  if (expected) {
+    const prev = { done: false, date: null, amount: expected.amount === expected.planned ? null : expected.amount };
+    mutateItem(ym, expected, { done: true, date, amount: got === expected.planned ? null : got });
+    render(); again();
+    toast(`Ticked off ${expected.name} (${money(got)})${where}.`, { action: 'Undo', fn: () => { const it = itemsFor(ym).find(i => i.key === expected.key); if (it) { mutateItem(ym, it, prev); render(); } } });
+    return;
+  }
+  const x = { id: uid('x'), type: 'income', name, amount: got, date, category: 'Income' };
+  if (received) { x.done = true; x.doneDate = date; }
+  ensureMonth(ym).extras.push(x); touchMonth(ym);
+  render(); again();
+  toast(`${received ? 'Added' : 'Expecting'} ${money(got)} from ${name}${where}.`, { action: 'Undo', fn: () => { const mo = D.months[ym]; if (mo) { mo.extras = mo.extras.filter(e => e.id !== x.id); touchMonth(ym); render(); } } });
 }
 function removeSpend(id) {
   const mo = D.months[UI.ym], s = mo && mo.spends.find(x => x.id === id);
@@ -1850,7 +1966,15 @@ const ACTIONS = {
   'month-next': () => { UI.ym = addMonths(UI.ym, 1); UI.open = null; render(); },
   'month-today': () => { UI.ym = thisMonth(); UI.open = null; render(); },
   toggle: el => { const it = findItem(el.dataset.key); if (it) { toggleDone(UI.ym, it); render(); } },
-  open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
+  open: el => {
+    UI.open = el.dataset.focus ? el.dataset.key : (UI.open === el.dataset.key ? null : el.dataset.key); render();
+    if (el.dataset.focus && UI.open) { const f = $('.detail input[data-chg=amount]'); if (f) { f.focus(); f.select(); } }
+  },
+  'add-bill': () => openAddBill(),
+  'edit-amount': el => openTemplateDialog(el.dataset.id, {}, { focus: 'amount' }),
+  'del-tmpl': el => askDeleteTemplate(el.dataset.id),
+  'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
+  'tmpl-delete': el => deleteTemplate(el.dataset.id),
   skip: el => {
     const it = findItem(el.dataset.key); if (!it) return;
     mutateItem(UI.ym, it, it.skip ? { skip: false } : { skip: true, done: false, date: null, txn: null });
@@ -1983,6 +2107,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'tf') submitTemplate();
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
+  else if (e.target.classList.contains('incf')) submitIncome(e.target);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

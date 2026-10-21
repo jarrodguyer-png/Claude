@@ -68,16 +68,19 @@ function tmplFields(v) {
   return out.join('');
 }
 let TF = null;
-function openTemplateDialog(id, preset = {}) {
+function openTemplateDialog(id, preset = {}, opts = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
   TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
+  TF.ctx = preset.ctx || (UI.tab === 'month' ? UI.ym : thisMonth());
+  if (t) TF.amount = amountFor(t, TF.ctx);
   const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
   openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
     <div class="dlg-b">
       <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
         <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
+      ${t ? `<label class="field">Apply a new amount to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount.</small></label>` : ''}
       <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
         ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
       ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
@@ -88,11 +91,8 @@ function openTemplateDialog(id, preset = {}) {
     </div>
     <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
   if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
-  if (t) $('#tf-del').onclick = e => {
-    const b = e.currentTarget;
-    if (b.dataset.sure) { D.templates = D.templates.filter(x => x.id !== t.id); touchMeta(); closeModal(true); render(); toast(`Deleted ${t.name}.`); return; }
-    b.dataset.sure = '1'; b.textContent = 'Remove from every month?'; setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = 'Delete'; } }, 4000);
-  };
+  if (t) $('#tf-del').onclick = () => askDeleteTemplate(t.id);
+  if (opts.focus) { const f = $('#tf-' + opts.focus); if (f) { f.focus(); if (f.select) f.select(); } }
 }
 function readTmplForm(soft) {
   const g = id => { const el = $('#' + id); return el ? el.value : undefined; };
@@ -107,6 +107,7 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
+  if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
@@ -121,7 +122,14 @@ function submitTemplate() {
   if (!obj.autopay) delete obj.autopay;
   if (TF.budget) obj.budget = true;
   let t;
-  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k]; Object.assign(t, obj); }
+  if (TF.editing) {
+    t = D.templates.find(x => x.id === TF.id);
+    const prev = amountFor(t, TF.ctx), next = obj.amount;
+    delete obj.amount;
+    for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k];
+    Object.assign(t, obj);
+    if (next !== prev) { if (TF.apply === 'all') { t.amount = next; delete t.changes; } else setAmountFrom(t, TF.ctx, next); }
+  }
   else { t = { id: uid('b'), ...obj }; D.templates.push(t); }
   touchMeta();
   const link = TF.linkTxn && txnById(TF.linkTxn);
@@ -129,6 +137,51 @@ function submitTemplate() {
   if (link) { const it = itemsFor(ymOf(link.date)).find(i => i.tmpl && i.tmpl.id === t.id); if (it) linkItem(ymOf(link.date), it, link); }
   render();
   toast(TF.editing ? 'Saved.' : `Added ${t.name}.`);
+}
+
+/* ---------- add / remove from the Month tab ---------- */
+function openAddBill() {
+  openModal(`${dlgHead('Add a bill')}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="add-tmpl" data-type="bill">Every month, or another schedule</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Rent, utilities, subscriptions. It shows up every time it is due.</p>
+    <button type="button" class="btn" data-act="add-extra" data-type="bill">Just this month (${esc(fmtMonth(UI.ym))})</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">A one-off, like a repair or a registration fee.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
+}
+function askDeleteTemplate(id) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const ym = UI.tab === 'month' ? UI.ym : thisMonth();
+  openModal(`${dlgHead(`Remove ${esc(t.name)}?`)}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="tmpl-stop" data-id="${esc(id)}" data-ym="${ym}">Stop it from ${esc(fmtMonth(ym))} on</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Keeps ${esc(fmtMonth(addMonths(ym, -1)))} and earlier exactly as they are, including what you ticked off.</p>
+    <button type="button" class="btn danger" data-act="tmpl-delete" data-id="${esc(id)}">Delete from every month</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">Also erases earlier months for this item, including payments you ticked off.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
+}
+function stopTemplate(id, ym) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const prevEnd = t.end, end = addMonths(ym, -1);
+  if (t.start && end < t.start) { deleteTemplate(id); return; } // it never applied before this month
+  t.end = end; touchMeta(); closeModal(true); UI.open = null; render();
+  toast(`${t.name} stops from ${fmtMonth(ym)}.`, { action: 'Undo', fn: () => { if (prevEnd) t.end = prevEnd; else delete t.end; touchMeta(); render(); }, ms: 8000 });
+}
+function deleteTemplate(id) {
+  const t = D.templates.find(x => x.id === id); if (!t) return;
+  const snap = { t, idx: D.templates.indexOf(t), entries: {}, spends: {} };
+  D.templates = D.templates.filter(x => x.id !== id); touchMeta();
+  for (const [ym, mo] of Object.entries(D.months)) {
+    const ent = Object.entries(mo.entries).filter(([k]) => k.startsWith(id + '@')), sp = (mo.spends || []).filter(s => s.t === id);
+    if (!ent.length && !sp.length) continue;
+    snap.entries[ym] = Object.fromEntries(ent); snap.spends[ym] = sp;
+    ent.forEach(([k]) => { delete mo.entries[k]; });
+    mo.spends = (mo.spends || []).filter(s => s.t !== id); touchMonth(ym);
+  }
+  closeModal(true); UI.open = null; render();
+  toast(`Deleted ${t.name}.`, { ms: 9000, action: 'Undo', fn: () => {
+    D.templates.splice(Math.min(snap.idx, D.templates.length), 0, snap.t); touchMeta();
+    for (const ym of new Set([...Object.keys(snap.entries), ...Object.keys(snap.spends)])) { const mo = ensureMonth(ym); Object.assign(mo.entries, snap.entries[ym] || {}); mo.spends.push(...(snap.spends[ym] || [])); touchMonth(ym); }
+    render();
+  } });
 }
 
 /* ---------- one-off bill or income for a single month ---------- */
@@ -163,6 +216,28 @@ function submitSpend(f) {
   render();
   if (ym !== UI.ym) toast(`Added to ${fmtMonth(ym)}.`);
   if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
+}
+/* quick income entry: ticks off a matching expected paycheck, otherwise records a one-off */
+function submitIncome(f) {
+  const name = f.elements.source.value.trim(), amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr();
+  if (!name || isNaN(amount) || amount <= 0) { toast('Enter a source and an amount.'); return; }
+  const ym = ymOf(date), got = r2(amount), received = date <= todayStr();
+  const near = i => Math.abs(dayNum(i.due) - dayNum(date));
+  const expected = received ? itemsFor(ym).filter(i => i.type === 'income' && i.rec && !i.done && !i.skip && normText(i.name) === normText(name) && near(i) <= 12).sort((a, b) => near(a) - near(b))[0] : null;
+  const where = ym !== UI.ym ? ` in ${fmtMonth(ym)}` : '';
+  const again = () => { if (!matchMedia('(pointer: coarse)').matches) { const n = $('.incf input[name=source]'); if (n) n.focus(); } };
+  if (expected) {
+    const prev = { done: false, date: null, amount: expected.amount === expected.planned ? null : expected.amount };
+    mutateItem(ym, expected, { done: true, date, amount: got === expected.planned ? null : got });
+    render(); again();
+    toast(`Ticked off ${expected.name} (${money(got)})${where}.`, { action: 'Undo', fn: () => { const it = itemsFor(ym).find(i => i.key === expected.key); if (it) { mutateItem(ym, it, prev); render(); } } });
+    return;
+  }
+  const x = { id: uid('x'), type: 'income', name, amount: got, date, category: 'Income' };
+  if (received) { x.done = true; x.doneDate = date; }
+  ensureMonth(ym).extras.push(x); touchMonth(ym);
+  render(); again();
+  toast(`${received ? 'Added' : 'Expecting'} ${money(got)} from ${name}${where}.`, { action: 'Undo', fn: () => { const mo = D.months[ym]; if (mo) { mo.extras = mo.extras.filter(e => e.id !== x.id); touchMonth(ym); render(); } } });
 }
 function removeSpend(id) {
   const mo = D.months[UI.ym], s = mo && mo.spends.find(x => x.id === id);

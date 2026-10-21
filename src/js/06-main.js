@@ -14,7 +14,15 @@ const ACTIONS = {
   'month-next': () => { UI.ym = addMonths(UI.ym, 1); UI.open = null; render(); },
   'month-today': () => { UI.ym = thisMonth(); UI.open = null; render(); },
   toggle: el => { const it = findItem(el.dataset.key); if (it) { toggleDone(UI.ym, it); render(); } },
-  open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
+  open: el => {
+    UI.open = el.dataset.focus ? el.dataset.key : (UI.open === el.dataset.key ? null : el.dataset.key); render();
+    if (el.dataset.focus && UI.open) { const f = $('.detail input[data-chg=amount]'); if (f) { f.focus(); f.select(); } }
+  },
+  'add-bill': () => openAddBill(),
+  'edit-amount': el => openTemplateDialog(el.dataset.id, {}, { focus: 'amount' }),
+  'del-tmpl': el => askDeleteTemplate(el.dataset.id),
+  'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
+  'tmpl-delete': el => deleteTemplate(el.dataset.id),
   skip: el => {
     const it = findItem(el.dataset.key); if (!it) return;
     mutateItem(UI.ym, it, it.skip ? { skip: false } : { skip: true, done: false, date: null, txn: null });
@@ -147,6 +155,7 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'tf') submitTemplate();
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
+  else if (e.target.classList.contains('incf')) submitIncome(e.target);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

@@ -147,6 +147,10 @@ button { cursor: pointer; }
 .rname { font-weight: 600; overflow-wrap: anywhere; }
 .rmeta { font-size: 13px; color: var(--ink-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ramt { font-family: var(--f-data); font-variant-numeric: tabular-nums; font-weight: 500; text-align: right; white-space: nowrap; }
+.ramt.edit { background: none; border: 0; border-bottom: 1px dashed var(--muted); border-radius: 0; padding: 4px 0 2px; display: inline-flex; gap: 6px; align-items: center; color: inherit; }
+.ramt.edit svg { color: var(--muted); flex: none; }
+.ramt.edit:hover { border-bottom-color: var(--accent); }
+.ramt.edit:hover svg { color: var(--accent); }
 .row.paid .rname, .row.paid .ramt { color: var(--muted); }
 .row.paid .rname { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .row.skip .rname, .row.skip .ramt { color: var(--muted); font-style: italic; }
@@ -177,6 +181,20 @@ button { cursor: pointer; }
 .entries .enote { overflow-wrap: anywhere; color: var(--ink-2); }
 .entries .btn { min-height: 30px; padding: 0 8px; }
 .bentries { display: grid; gap: 2px; }
+
+/* quick income entry, and the phone order: budgets, income, then bills */
+.incf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
+.incf .inp { width: auto; min-width: 0; }
+.incf input[name=source] { flex: 2 1 150px; }
+.incf input[name=amount] { flex: 1 1 100px; max-width: 140px; }
+.incf input[name=date] { flex: 0 1 150px; }
+@media (max-width: 899px) {
+  .cols .stack { display: contents; }
+  .cols .c-bud { order: 1; }
+  .cols .c-inc { order: 2; }
+  .cols .c-bills { order: 3; }
+  .cols .c-note { order: 4; }
+}
 
 /* forms */
 .field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }

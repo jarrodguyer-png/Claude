@@ -51,6 +51,7 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
    a template with budget:true is a monthly spending limit rather than a fixed payment
+   template.amount is the starting amount; template.changes [{from:'YYYY-MM',amount}] holds later changes, so past months keep the amount they had
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -62,7 +63,7 @@ let D = emptyData();
 
 const FREQ = { monthly: 'Monthly', twice: 'Twice a month', biweekly: 'Every 2 weeks', weekly: 'Every week', quarterly: 'Every 3 months', semiannual: 'Every 6 months', yearly: 'Once a year' };
 const PER_YEAR = { monthly: 12, twice: 24, biweekly: 26, weekly: 52, quarterly: 4, semiannual: 2, yearly: 1 };
-const monthlyEquiv = t => t.amount * PER_YEAR[t.freq] / 12;
+const monthlyEquiv = t => amountFor(t, thisMonth()) * PER_YEAR[t.freq] / 12;
 function freqText(t) {
   switch (t.freq) {
     case 'monthly': return `Monthly on the ${ord(t.day)}`;

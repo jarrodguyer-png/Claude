@@ -19,14 +19,24 @@ function occurrences(t, ym) {
     default: return [clampDay(ym, t.day)];
   }
 }
+/* the planned amount of a recurring item in a given month, honouring later changes */
+function amountFor(t, ym) { let a = t.amount; for (const c of t.changes || []) if (c.from <= ym) a = c.amount; return a; }
+/* change the amount from a month onward; earlier months keep what they had */
+function setAmountFrom(t, ym, amount) {
+  const keep = (t.changes || []).filter(c => c.from < ym);
+  if (t.start && ym <= t.start && !keep.length) { t.amount = amount; delete t.changes; return; }
+  const before = keep.length ? keep[keep.length - 1].amount : t.amount;
+  if (amount !== before) keep.push({ from: ym, amount });
+  if (keep.length) t.changes = keep; else delete t.changes;
+}
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
   const items = [];
   for (const t of D.templates) {
     for (const due of occurrences(t, ym)) {
-      const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {};
-      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
+      const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {}, base = amountFor(t, ym);
+      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: base, amount: e.amount ?? base, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
     }
   }
   for (const x of (mo && mo.extras) || []) {
