@@ -2,6 +2,8 @@
 const UI = { tab: 'month', ym: thisMonth(), open: null, gAll: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
+/* a label tied to the hidden file input, so a tap opens the picker natively instead of through script */
+const fileBtn = (cls, text) => `<label class="btn ${cls}" for="file" tabindex="0" role="button">${text}</label>`;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
 const entryDate = ym => { const cur = thisMonth(); return ym === cur ? todayStr() : ym < cur ? `${ym}-${pad(daysIn(ym))}` : `${ym}-01`; };
 const ICON = {
@@ -230,8 +232,10 @@ function viewBank() {
   if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Reconcile</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
     <div class="drop" id="drop"><h3>Add a statement</h3>
       <p>Drop a CSV, OFX/QFX or PDF file here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
-      <div class="actions" style="justify-content:center"><button class="btn primary" data-act="choose-files">Choose files</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div></div>`;
-  const bar = `<div class="bankbar"><div class="seg" role="group" aria-label="Bank views">${BANK_SUBS.map(([id, l]) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${l}</button>`).join('')}</div><button class="btn primary sm" data-act="choose-files">+ Add statement</button></div>`;
+      <div class="actions" style="justify-content:center">${fileBtn('primary', 'Choose files')}${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div>
+      <details class="more pastebox"><summary>Or paste the statement text</summary>
+        <form class="pastef" autocomplete="off"><textarea id="pastetext" class="inp" rows="5" placeholder="Paste the contents of a CSV or OFX file here" aria-label="Statement text" required></textarea><button class="btn primary sm" type="submit">Read it</button></form></details></div>`;
+  const bar = `<div class="bankbar"><div class="seg" role="group" aria-label="Bank views">${BANK_SUBS.map(([id, l]) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${l}</button>`).join('')}</div>${fileBtn('primary sm', '+ Add statement')}</div>`;
   const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? `<div class="stack">${viewTxns()}${viewFiles()}</div>` : viewSpending();
   return sampleBanner() + bar + body;
 }
@@ -344,7 +348,7 @@ function monthChart(by, W) {
 function viewSpending() {
   const head = `<div class="pagehead"><div><h1>Where the money goes</h1><p class="lede">Built from the statements you have added. Transfers are left out, and refunds reduce the category they belong to.</p></div>
     <label class="field" style="grid-auto-flow:column;align-items:center;gap:10px">Period<select class="inp sm" data-chg="range" style="min-width:150px">${RANGES.map(([v, l]) => `<option value="${v}"${UI.range === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>`;
-  if (!D.txns.length) return head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : '<button class="btn primary" data-act="choose-files">Add a statement</button>')}</section>`;
+  if (!D.txns.length) return head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : fileBtn('primary', 'Add a statement'))}</section>`;
   const { from, to } = rangeFor(UI.range), st = spendStats(from, to), months = Object.keys(st.byMonth);
   let act = months.filter(m => st.byMonth[m].in || st.byMonth[m].out);
   if (!act.length) act = months;
@@ -352,7 +356,7 @@ function viewSpending() {
   const label = first === last ? fmtMonth(first) : `${fmtMonth(first)} to ${fmtMonth(last)}`;
   const chartBy = {};
   months.slice(months.indexOf(first), months.indexOf(last) + 1).forEach(m => { chartBy[m] = st.byMonth[m]; });
-  if (!st.count) return head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : '<button class="btn" data-act="choose-files">Add a statement</button>')}</section>`;
+  if (!st.count) return head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : fileBtn('', 'Add a statement'))}</section>`;
   const net = r2(st.income - st.spent), active = act.length || 1;
   const cats = Object.entries(st.byCat).filter(([, v]) => Math.abs(v) >= .005).sort((a, b) => b[1] - a[1]);
   const pos = cats.filter(([, v]) => v > 0), maxC = pos.length ? pos[0][1] : 1;

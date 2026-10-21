@@ -65,7 +65,6 @@ const ACTIONS = {
   'clear-sample': () => askConfirm({ title: 'Clear the example data?', text: 'This removes the example bills, income, statement lines and check-offs. Anything you added yourself while the examples were showing is removed too.', ok: 'Clear example data', danger: true },
     async () => { D = emptyData(); await Store.replaceAll(); UI.open = null; render(); toast('Cleared. You are starting fresh.'); }),
   sub: el => { UI.sub = el.dataset.sub === 'files' ? 'transactions' : el.dataset.sub; render(); },
-  'choose-files': () => $('#file').click(),
   'apply-sugg': () => {
     const ym = reconcileMonth(); let n = 0;
     for (const cb of $$('input[data-sg]:checked')) {
@@ -187,6 +186,11 @@ document.addEventListener('submit', e => {
     addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`, true);
     render(); toast(`${row[1]} is now ${money(t)}.`);
   }
+  else if (e.target.classList.contains('pastef')) {
+    const text = e.target.elements.pastetext.value;
+    if (!text.trim()) { toast('Paste the statement text first.'); return; }
+    handleFiles([new File([text], 'pasted statement.csv', { type: 'text/csv' })]);
+  }
   else if (e.target.classList.contains('planf')) {
     const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
     if (isNaN(a) || a <= 0) { toast('Enter your balance.'); return; }
@@ -202,6 +206,7 @@ for (const ev of ['pointermove', 'pointerdown']) {
 document.addEventListener('scroll', hideTip, { passive: true });
 
 /* files: picker and drag-and-drop */
+document.addEventListener('keydown', e => { const l = e.target.closest && e.target.closest('label[for=file]'); if (l && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#file').click(); } });
 $('#file').addEventListener('change', e => { if (RO()) return; const files = [...e.target.files]; e.target.value = ''; handleFiles(files); });
 document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); const d = $('#drop'); if (d) d.classList.add('over'); } });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) { const d = $('#drop'); if (d) d.classList.remove('over'); } });

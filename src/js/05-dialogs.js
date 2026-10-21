@@ -302,6 +302,7 @@ function removeSpend(id) {
 let IM = null, IMQ = [], IMN = 0, IMSTAT = { added: 0, files: 0, months: {} };
 async function prepareFile(f) {
   const ext = f.name.split('.').pop().toLowerCase();
+  if (/^(xlsx?|xlsm|ods|numbers|zip|docx?|png|jpe?g|heic|gif)$/.test(ext)) throw new Error(`${ext.toUpperCase()} files cannot be read. In your bank's site or in Excel, save or export the statement as CSV and add that file`);
   if (ext === 'pdf') {
     const lines = await extractPdfLines(await f.arrayBuffer());
     const r = parsePdfLines(lines);
@@ -309,6 +310,7 @@ async function prepareFile(f) {
     return { name: f.name, kind: 'pdf', txns: r.txns };
   }
   const text = await f.text();
+  if (text.startsWith('PK\u0003\u0004') || text.slice(0, 2000).includes('\u0000')) throw new Error('this is not a text file. Export the statement as CSV, OFX or PDF');
   if (ext === 'ofx' || ext === 'qfx' || /<OFX>|<STMTTRN>/i.test(text)) {
     const txns = parseOFX(text);
     if (!txns.length) throw new Error('no transactions found');
