@@ -128,6 +128,8 @@ function detailHTML(it, link) {
   return `<div class="detail">
     <div class="fgrid">
       <label class="field">This month's amount<input class="num" type="number" step="0.01" min="0" value="${it.amount}" data-chg="amount" data-key="${k}"></label>
+      <div class="field"><label for="due-input">${it.type === 'income' ? 'Expected on' : 'Due date'}</label><input id="due-input" type="date" value="${esc(it.due)}" data-chg="duedate" data-key="${k}">
+        ${it.rec ? `<label class="checkline" style="font-weight:400"><input id="due-once" type="checkbox"> Only this month</label><small>Otherwise the new date is used for every month from ${esc(fmtMonth(UI.tab === 'statements' ? reconcileMonth() : UI.ym))} on.</small>` : ''}</div>
       ${it.done ? `<label class="field">${verb} on<input type="date" value="${esc(it.doneDate || it.due)}" data-chg="paiddate" data-key="${k}"></label>` : ''}
       <label class="field">Note<input type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" data-chg="note" data-key="${k}"></label>
     </div>
@@ -147,7 +149,7 @@ function viewObligations() {
   const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
     ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button><button class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">Add budget</button></div>'}</div>`;
   if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
-  const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && t.anchor ? +t.anchor.slice(8, 10) : (t.day || 1);
+  const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && fieldFor(t, cur, 'anchor') ? +fieldFor(t, cur, 'anchor').slice(8, 10) : (fieldFor(t, cur, 'day') || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
   const byCat = {};
   bills.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + monthlyEquiv(t); });

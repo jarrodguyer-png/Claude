@@ -51,7 +51,8 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
    a template with budget:true is a monthly spending limit rather than a fixed payment
-   template.amount is the starting amount; template.changes [{from:'YYYY-MM',amount}] holds later changes, so past months keep the amount they had
+   template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
+   an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -64,15 +65,16 @@ let D = emptyData();
 const FREQ = { monthly: 'Monthly', twice: 'Twice a month', biweekly: 'Every 2 weeks', weekly: 'Every week', quarterly: 'Every 3 months', semiannual: 'Every 6 months', yearly: 'Once a year' };
 const PER_YEAR = { monthly: 12, twice: 24, biweekly: 26, weekly: 52, quarterly: 4, semiannual: 2, yearly: 1 };
 const monthlyEquiv = t => amountFor(t, thisMonth()) * PER_YEAR[t.freq] / 12;
-function freqText(t) {
+function freqText(t, ym = thisMonth()) {
+  const day = fieldFor(t, ym, 'day'), day2 = fieldFor(t, ym, 'day2'), anchor = fieldFor(t, ym, 'anchor');
   switch (t.freq) {
-    case 'monthly': return `Monthly on the ${ord(t.day)}`;
-    case 'twice': return `Twice a month, ${ord(t.day)} and ${ord(t.day2 || 15)}`;
-    case 'biweekly': return t.anchor ? `Every other ${WEEKDAYS[weekdayOf(t.anchor)]}` : 'Every 2 weeks';
-    case 'weekly': return t.anchor ? `Every ${WEEKDAYS[weekdayOf(t.anchor)]}` : 'Every week';
-    case 'quarterly': return `Every 3 months on the ${ord(t.day)}`;
-    case 'semiannual': return `Every 6 months on the ${ord(t.day)}`;
-    case 'yearly': return `Yearly, ${MONTHS[(t.month || 1) - 1]} ${ord(t.day)}`;
+    case 'monthly': return `Monthly on the ${ord(day)}`;
+    case 'twice': return `Twice a month, ${ord(day)} and ${ord(day2 || 15)}`;
+    case 'biweekly': return anchor ? `Every other ${WEEKDAYS[weekdayOf(anchor)]}` : 'Every 2 weeks';
+    case 'weekly': return anchor ? `Every ${WEEKDAYS[weekdayOf(anchor)]}` : 'Every week';
+    case 'quarterly': return `Every 3 months on the ${ord(day)}`;
+    case 'semiannual': return `Every 6 months on the ${ord(day)}`;
+    case 'yearly': return `Yearly, ${MONTHS[(t.month || 1) - 1]} ${ord(day)}`;
   }
   return '';
 }

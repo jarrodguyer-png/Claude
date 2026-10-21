@@ -74,13 +74,13 @@ function openTemplateDialog(id, preset = {}, opts = {}) {
   TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
   TF.ctx = preset.ctx || (UI.tab === 'month' ? UI.ym : thisMonth());
-  if (t) TF.amount = amountFor(t, TF.ctx);
+  if (t) { TF.amount = amountFor(t, TF.ctx); TF.day = fieldFor(t, TF.ctx, 'day'); TF.day2 = fieldFor(t, TF.ctx, 'day2'); TF.anchor = fieldFor(t, TF.ctx, 'anchor') || TF.anchor; }
   const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
   openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
     <div class="dlg-b">
       <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
         <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
-      ${t ? `<label class="field">Apply a new amount to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount.</small></label>` : ''}
+      ${t ? `<label class="field">Apply a new amount or due day to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount or the due day.</small></label>` : ''}
       <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
         ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
       ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
@@ -124,11 +124,20 @@ function submitTemplate() {
   let t;
   if (TF.editing) {
     t = D.templates.find(x => x.id === TF.id);
-    const prev = amountFor(t, TF.ctx), next = obj.amount;
-    delete obj.amount;
-    for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k];
-    Object.assign(t, obj);
-    if (next !== prev) { if (TF.apply === 'all') { t.amount = next; delete t.changes; } else setAmountFrom(t, TF.ctx, next); }
+    // amount and due day(s) keep a history; changing how often it repeats applies to every month
+    const fields = ['amount', 'day', 'day2', 'anchor'], eff = f => fieldFor(t, TF.ctx, f);
+    const prev = Object.fromEntries(fields.map(f => [f, eff(f)])), next = Object.fromEntries(fields.map(f => [f, obj[f]]));
+    const rest = { ...obj }; fields.forEach(f => { delete rest[f]; });
+    const freqChanged = obj.freq !== t.freq || (obj.month || 1) !== (t.month || 1), everywhere = freqChanged || TF.apply === 'all';
+    // only the fields that matter for how often it repeats are compared, so unrelated defaults never land in the history
+    const relevant = ['amount', ...(obj.freq === 'twice' ? ['day', 'day2'] : obj.freq === 'weekly' || obj.freq === 'biweekly' ? ['anchor'] : ['day'])];
+    const setBase = (f, v) => { if (v === undefined) delete t[f]; else t[f] = v; clearField(t, f); };
+    reschedule(t, everywhere ? '' : TF.ctx, () => {
+      for (const k of ['start', 'end', 'match', 'autopay', 'budget']) delete t[k];
+      Object.assign(t, rest);
+      if (freqChanged) { fields.forEach(f => setBase(f, next[f])); delete t.changes; }
+      else relevant.forEach(f => { if (next[f] !== prev[f]) { if (TF.apply === 'all') setBase(f, next[f]); else setFieldFrom(t, TF.ctx, f, next[f]); } });
+    });
   }
   else { t = { id: uid('b'), ...obj }; D.templates.push(t); }
   touchMeta();

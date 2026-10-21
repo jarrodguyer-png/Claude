@@ -118,6 +118,16 @@ const CHANGE = {
     const a = r2(v);
     mutateItem(curYm(), it, { amount: it.rec && a === it.planned ? null : a }); render();
   },
+  duedate: el => {
+    const ym = curYm(), it = findItem(el.dataset.key, ym), nd = el.value;
+    if (!it || !/^\d{4}-\d{2}-\d{2}$/.test(nd) || nd === it.due) { render(); return; }
+    const once = !!($('#due-once') && $('#due-once').checked), r = setDueDate(ym, it, nd, once);
+    if (r.key && UI.open === it.key) UI.open = r.key; // the row's key follows its new date
+    render();
+    if (r.moved) toast(`Moved to ${fmtMonth(r.moved)}.`);
+    else if (r.once) toast(`${it.name} is due ${fmtShort(nd)} this month only.`);
+    else if (r.undo) toast(`${it.name} is now due on the ${ord(r.day)} from ${fmtMonth(ym)} on.`, { action: 'Undo', ms: 8000, fn: () => { r.undo(); render(); } });
+  },
   paiddate: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { date: el.value || null }); render(); } },
   note: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { note: el.value.trim() }); render(); } },
   link: el => {

@@ -1,33 +1,102 @@
 /* ---------- recurring schedule -> this month's checklist ---------- */
+/* Amount, due day(s) and weekly anchor can change over time. t[field] is the starting value and t.changes
+   [{from:'YYYY-MM', amount?, day?, day2?, anchor?}] holds later ones, so earlier months keep what they had. */
+function fieldFor(t, ym, f) { let v = t[f]; for (const c of t.changes || []) if (c.from <= ym && f in c) v = c[f]; return v; }
+const amountFor = (t, ym) => fieldFor(t, ym, 'amount');
+function clearField(t, f) {
+  if (!t.changes) return;
+  t.changes.forEach(c => { delete c[f]; });
+  t.changes = t.changes.filter(c => Object.keys(c).length > 1);
+  if (!t.changes.length) delete t.changes;
+}
+/* set a field from a month onward; anything scheduled for that field later is replaced */
+function setFieldFrom(t, ym, f, v) {
+  const ch = (t.changes || []).map(c => ({ ...c }));
+  ch.forEach(c => { if (c.from >= ym) delete c[f]; });
+  const kept = ch.filter(c => Object.keys(c).length > 1).sort((a, b) => a.from.localeCompare(b.from));
+  const earlier = kept.filter(c => c.from < ym && f in c);
+  const before = earlier.length ? earlier[earlier.length - 1][f] : t[f];
+  if (t.start && ym <= t.start && !earlier.length) { if (v === undefined) delete t[f]; else t[f] = v; }
+  else if (v !== before) {
+    let c = kept.find(x => x.from === ym);
+    if (!c) { c = { from: ym }; kept.push(c); kept.sort((a, b) => a.from.localeCompare(b.from)); }
+    c[f] = v;
+  }
+  if (kept.length) t.changes = kept; else delete t.changes;
+}
 function occurrences(t, ym) {
   if (t.start && ym < t.start) return [];
   if (t.end && ym > t.end) return [];
-  const m = +ym.slice(5, 7);
+  const m = +ym.slice(5, 7), day = fieldFor(t, ym, 'day'), day2 = fieldFor(t, ym, 'day2'), anchor = fieldFor(t, ym, 'anchor');
   switch (t.freq) {
-    case 'twice': { const a = clampDay(ym, t.day), b = clampDay(ym, t.day2 || 15); return a === b ? [a] : [a, b].sort(); }
+    case 'twice': { const a = clampDay(ym, day), b = clampDay(ym, day2 || 15); return a === b ? [a] : [a, b].sort(); }
     case 'quarterly': case 'semiannual': case 'yearly': {
       const step = t.freq === 'quarterly' ? 3 : t.freq === 'semiannual' ? 6 : 12;
-      return (((m - (t.month || 1)) % step) + step) % step === 0 ? [clampDay(ym, t.day)] : [];
+      return (((m - (t.month || 1)) % step) + step) % step === 0 ? [clampDay(ym, day)] : [];
     }
     case 'biweekly': case 'weekly': {
-      if (!t.anchor) return [];
-      const step = t.freq === 'weekly' ? 7 : 14, a = dayNum(t.anchor), first = dayNum(ym + '-01'), last = first + daysIn(ym) - 1;
+      if (!anchor) return [];
+      const step = t.freq === 'weekly' ? 7 : 14, a = dayNum(anchor), first = dayNum(ym + '-01'), last = first + daysIn(ym) - 1;
       const out = [];
       for (let d = a + Math.ceil((first - a) / step) * step; d <= last; d += step) out.push(fromDayNum(d));
       return out;
     }
-    default: return [clampDay(ym, t.day)];
+    default: return [clampDay(ym, day)];
   }
 }
-/* the planned amount of a recurring item in a given month, honouring later changes */
-function amountFor(t, ym) { let a = t.amount; for (const c of t.changes || []) if (c.from <= ym) a = c.amount; return a; }
-/* change the amount from a month onward; earlier months keep what they had */
-function setAmountFrom(t, ym, amount) {
-  const keep = (t.changes || []).filter(c => c.from < ym);
-  if (t.start && ym <= t.start && !keep.length) { t.amount = amount; delete t.changes; return; }
-  const before = keep.length ? keep[keep.length - 1].amount : t.amount;
-  if (amount !== before) keep.push({ from: ym, amount });
-  if (keep.length) t.changes = keep; else delete t.changes;
+/* Entries are keyed by scheduled date, so when a schedule changes the ticked-off state, notes and linked
+   statement lines move with it. Returns {oldKey:newKey}. */
+function reschedule(t, fromYm, apply) {
+  const months = Object.keys(D.months).filter(m => m >= fromYm && Object.keys(D.months[m].entries).some(k => k.startsWith(t.id + '@')));
+  const before = {};
+  months.forEach(m => { before[m] = occurrences(t, m); });
+  apply();
+  const keyMap = {};
+  months.forEach(m => {
+    const mo = D.months[m], after = occurrences(t, m), moves = [];
+    before[m].forEach((d, i) => {
+      if (i >= after.length) return;
+      const ok = t.id + '@' + d, nk = t.id + '@' + after[i];
+      if (ok !== nk && mo.entries[ok]) { moves.push([ok, nk, mo.entries[ok]]); keyMap[ok] = nk; }
+    });
+    moves.forEach(([ok]) => { delete mo.entries[ok]; });
+    moves.forEach(([, nk, e]) => { mo.entries[nk] = e; });
+    if (moves.length) touchMonth(m);
+  });
+  touchMeta();
+  return keyMap;
+}
+/* a copy of a template and its entries from a month on, so a change can be undone */
+function snapshotSchedule(t, fromYm) {
+  const copy = JSON.parse(JSON.stringify(t)), ents = {};
+  for (const [m, mo] of Object.entries(D.months)) if (m >= fromYm) ents[m] = JSON.parse(JSON.stringify(mo.entries));
+  return () => {
+    for (const k of Object.keys(t)) delete t[k];
+    Object.assign(t, copy);
+    for (const [m, e] of Object.entries(ents)) { ensureMonth(m).entries = e; touchMonth(m); }
+    touchMeta();
+  };
+}
+/* move one occurrence's due date. "Only this month" is an override on that month; otherwise the new date becomes the standing date from this month on. */
+function setDueDate(ym, it, newDate, onlyThisMonth) {
+  if (!it.rec) {
+    const x = it.extra, nm = ymOf(newDate);
+    x.date = newDate;
+    if (nm !== ym) { D.months[ym].extras = D.months[ym].extras.filter(e => e !== x); ensureMonth(nm).extras.push(x); touchMonth(nm); }
+    touchMonth(ym);
+    return { moved: nm !== ym ? nm : null };
+  }
+  const t = it.tmpl;
+  if (onlyThisMonth || ymOf(newDate) !== ym) { mutateItem(ym, it, { due: newDate === it.sched ? null : newDate }); return { once: true }; }
+  const undo = snapshotSchedule(t, ym), day = +newDate.slice(8, 10);
+  const keyMap = reschedule(t, ym, () => {
+    if (t.freq === 'weekly' || t.freq === 'biweekly') setFieldFrom(t, ym, 'anchor', newDate);
+    else if (t.freq === 'twice') setFieldFrom(t, ym, it.sched === clampDay(ym, fieldFor(t, ym, 'day')) ? 'day' : 'day2', day);
+    else setFieldFrom(t, ym, 'day', day);
+  });
+  const mo = D.months[ym], nk = keyMap[it.key] || it.key;
+  if (mo && mo.entries[nk] && mo.entries[nk].due) { delete mo.entries[nk].due; touchMonth(ym); }
+  return { undo, day, key: nk };
 }
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
@@ -36,11 +105,11 @@ function itemsFor(ym) {
   for (const t of D.templates) {
     for (const due of occurrences(t, ym)) {
       const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {}, base = amountFor(t, ym);
-      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: base, amount: e.amount ?? base, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
+      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due: e.due || due, sched: due, planned: base, amount: e.amount ?? base, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
     }
   }
   for (const x of (mo && mo.extras) || []) {
-    items.push({ key: 'x:' + x.id, rec: false, type: x.type, name: x.name, category: x.category || 'Other', due: x.date, planned: x.amount, amount: x.amount, done: !!x.done, doneDate: x.doneDate || null, skip: false, note: x.note || '', txn: x.txn || null, extra: x });
+    items.push({ key: 'x:' + x.id, rec: false, sched: x.date, type: x.type, name: x.name, category: x.category || 'Other', due: x.date, planned: x.amount, amount: x.amount, done: !!x.done, doneDate: x.doneDate || null, skip: false, note: x.note || '', txn: x.txn || null, extra: x });
   }
   items.sort((a, b) => a.due.localeCompare(b.due) || a.name.localeCompare(b.name));
   return items;

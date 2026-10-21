@@ -207,6 +207,7 @@ button { cursor: pointer; }
 .inp.sm { min-height: 34px; padding: 5px 8px; font-size: 14px; width: auto; max-width: 100%; }
 .checkline { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; font-weight: 500; color: var(--ink); }
 .checkline input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.field .checkline { align-items: center; }
 .grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
 /* obligations */
