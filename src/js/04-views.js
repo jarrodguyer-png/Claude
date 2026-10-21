@@ -77,9 +77,10 @@ function viewMonth() {
     ${incForm}
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
-  </section>
-  ${RO() ? '' : '<p class="muted c-note" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
-  return nav + summary + `<div class="cols"><div class="stack">${budgetCard}${billsCard}</div><div class="stack">${incCard}</div></div>`;
+  </section>`;
+  const note = RO() ? '' : '<p class="muted" style="font-size:14px;margin-top:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>';
+  // bills first, then income, with the spending budgets in their own section at the bottom
+  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}${note}`;
 }
 /* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
 function budgetHTML(b, ym) {

@@ -196,20 +196,12 @@ button { cursor: pointer; }
 .entries .btn { min-height: 30px; padding: 0 8px; }
 .bentries { display: grid; gap: 2px; }
 
-/* quick income entry, and the phone order: budgets, income, then bills */
+/* quick income entry */
 .incf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
 .incf .inp { width: auto; min-width: 0; }
 .incf input[name=source] { flex: 2 1 150px; }
 .incf input[name=amount] { flex: 1 1 100px; max-width: 140px; }
 .incf input[name=date] { flex: 0 1 150px; }
-@media (max-width: 899px) {
-  .cols .stack { display: contents; }
-  .cols .c-bud { order: 1; }
-  .cols .c-inc { order: 2; }
-  .cols .c-bills { order: 3; }
-  .cols .c-note { order: 4; }
-}
-
 /* forms */
 .field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }
 .field input, .field select, .field textarea, .inp {
@@ -1358,9 +1350,10 @@ function viewMonth() {
     ${incForm}
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
-  </section>
-  ${RO() ? '' : '<p class="muted c-note" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
-  return nav + summary + `<div class="cols"><div class="stack">${budgetCard}${billsCard}</div><div class="stack">${incCard}</div></div>`;
+  </section>`;
+  const note = RO() ? '' : '<p class="muted" style="font-size:14px;margin-top:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>';
+  // bills first, then income, with the spending budgets in their own section at the bottom
+  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}${note}`;
 }
 /* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
 function budgetHTML(b, ym) {
