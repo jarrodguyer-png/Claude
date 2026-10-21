@@ -18,7 +18,7 @@ const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bank', 'Reconcile']]
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
 function chromeHTML() {
-  return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
+  return `<div class="brand">${ICON.mark}<span>Jarrod's CFO</span></div>
     <div class="top-r"><span id="saveState"></span>${RO() ? '' : `<button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button>`}</div>`;
 }
 function emptyState(title, text, buttons = '') {

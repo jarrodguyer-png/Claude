@@ -127,7 +127,7 @@ function memBackend() {
   return { mode: 'memory', async list() { return JSON.parse(JSON.stringify(m)); }, async set(k, b) { m[k] = JSON.parse(JSON.stringify(b)); }, async remove(k) { delete m[k]; } };
 }
 function lsBackend() {
-  const P = 'billledger.v1.';
+  const P = 'billledger.v1.'; // storage key kept from the first version so existing data stays put
   localStorage.setItem(P + '_t', '1'); localStorage.removeItem(P + '_t'); // throws when storage is blocked
   return {
     mode: 'browser',

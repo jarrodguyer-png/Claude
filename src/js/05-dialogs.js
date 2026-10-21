@@ -448,8 +448,8 @@ function txnCSV() {
 }
 async function restoreBackup(file) {
   let obj;
-  try { obj = JSON.parse(await file.text()); } catch (e) { toast('That file is not a Bill Ledger backup.'); return; }
-  if (!obj || obj.app !== 'bill-ledger' || !obj.data || !Array.isArray(obj.data.templates)) { toast('That file is not a Bill Ledger backup.'); return; }
+  try { obj = JSON.parse(await file.text()); } catch (e) { toast('That file is not a backup from this app.'); return; }
+  if (!obj || obj.app !== 'bill-ledger' || !obj.data || !Array.isArray(obj.data.templates)) { toast('That file is not a backup from this app.'); return; }
   askConfirm({ title: 'Replace everything with this backup?', text: `Backup from ${esc(obj.exported ? new Date(obj.exported).toLocaleString() : 'unknown date')}: ${plural(obj.data.templates.length, 'recurring item')}, ${plural((obj.data.txns || []).length, 'transaction')}. What you have now will be overwritten.`, ok: 'Replace', danger: true }, async () => {
     const d = Object.assign(emptyData(), obj.data);
     d.settings = Object.assign({ currency: 'USD' }, d.settings);

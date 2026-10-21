@@ -6,7 +6,7 @@
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Bill Ledger</title>
+<title>Jarrod's CFO</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -483,7 +483,7 @@ function memBackend() {
   return { mode: 'memory', async list() { return JSON.parse(JSON.stringify(m)); }, async set(k, b) { m[k] = JSON.parse(JSON.stringify(b)); }, async remove(k) { delete m[k]; } };
 }
 function lsBackend() {
-  const P = 'billledger.v1.';
+  const P = 'billledger.v1.'; // storage key kept from the first version so existing data stays put
   localStorage.setItem(P + '_t', '1'); localStorage.removeItem(P + '_t'); // throws when storage is blocked
   return {
     mode: 'browser',
@@ -1333,7 +1333,7 @@ const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bank', 'Reconcile']]
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
 function chromeHTML() {
-  return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
+  return `<div class="brand">${ICON.mark}<span>Jarrod's CFO</span></div>
     <div class="top-r"><span id="saveState"></span>${RO() ? '' : `<button class="icon-btn" data-act="settings" aria-label="Settings and backup">${ICON.gear}</button>`}</div>`;
 }
 function emptyState(title, text, buttons = '') {
@@ -2111,8 +2111,8 @@ function txnCSV() {
 }
 async function restoreBackup(file) {
   let obj;
-  try { obj = JSON.parse(await file.text()); } catch (e) { toast('That file is not a Bill Ledger backup.'); return; }
-  if (!obj || obj.app !== 'bill-ledger' || !obj.data || !Array.isArray(obj.data.templates)) { toast('That file is not a Bill Ledger backup.'); return; }
+  try { obj = JSON.parse(await file.text()); } catch (e) { toast('That file is not a backup from this app.'); return; }
+  if (!obj || obj.app !== 'bill-ledger' || !obj.data || !Array.isArray(obj.data.templates)) { toast('That file is not a backup from this app.'); return; }
   askConfirm({ title: 'Replace everything with this backup?', text: `Backup from ${esc(obj.exported ? new Date(obj.exported).toLocaleString() : 'unknown date')}: ${plural(obj.data.templates.length, 'recurring item')}, ${plural((obj.data.txns || []).length, 'transaction')}. What you have now will be overwritten.`, ok: 'Replace', danger: true }, async () => {
     const d = Object.assign(emptyData(), obj.data);
     d.settings = Object.assign({ currency: 'USD' }, d.settings);
@@ -2220,7 +2220,7 @@ const ACTIONS = {
     const i = D.cats.indexOf('Income'); D.cats.splice(i < 0 ? D.cats.length : i, 0, name); touchMeta(); openSettings();
   },
   'cat-del': el => { D.cats = D.cats.filter(c => c !== el.dataset.cat); touchMeta(); openSettings(); },
-  'export-json': () => saveFile(`bill-ledger-backup-${todayStr()}.json`, backupText(), 'application/json'),
+  'export-json': () => saveFile(`jarrods-cfo-backup-${todayStr()}.json`, backupText(), 'application/json'),
   'export-csv': () => saveFile(`transactions-${todayStr()}.csv`, txnCSV(), 'text/csv'),
   'restore-pick': () => $('#restore').click(),
   erase: () => askConfirm({ title: 'Erase all data?', text: 'This deletes every bill, income source, check-off and statement line, and it cannot be undone. Export a backup first if you might want anything back.', ok: 'Erase everything', danger: true },

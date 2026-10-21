@@ -98,7 +98,7 @@ const ACTIONS = {
     const i = D.cats.indexOf('Income'); D.cats.splice(i < 0 ? D.cats.length : i, 0, name); touchMeta(); openSettings();
   },
   'cat-del': el => { D.cats = D.cats.filter(c => c !== el.dataset.cat); touchMeta(); openSettings(); },
-  'export-json': () => saveFile(`bill-ledger-backup-${todayStr()}.json`, backupText(), 'application/json'),
+  'export-json': () => saveFile(`jarrods-cfo-backup-${todayStr()}.json`, backupText(), 'application/json'),
   'export-csv': () => saveFile(`transactions-${todayStr()}.csv`, txnCSV(), 'text/csv'),
   'restore-pick': () => $('#restore').click(),
   erase: () => askConfirm({ title: 'Erase all data?', text: 'This deletes every bill, income source, check-off and statement line, and it cannot be undone. Export a backup first if you might want anything back.', ok: 'Erase everything', danger: true },

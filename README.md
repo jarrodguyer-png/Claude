@@ -1,4 +1,4 @@
-# Bill Ledger
+# Jarrod's CFO
 
 A small web app for tracking monthly bills and income, ticking things off as they are paid, and checking them against bank statements.
 
