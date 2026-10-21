@@ -179,12 +179,26 @@ function growthCard(kind, label, cat) {
       : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Add what you have now as a starting balance.</p>'}
   </section>`;
 }
+function goalCard() {
+  const ym = UI.ym, P = growthPlan(ym), pct = P.goal > 0 ? Math.min(100, P.done / P.goal * 100) : 0, reached = P.income > 0 && P.need <= 0;
+  const nav = `<div class="goalnav"><button class="icon-btn" data-act="month-prev" aria-label="Previous month">${ICON.chevL}</button><span class="mlabel">${fmtMonth(ym)}</span><button class="icon-btn" data-act="month-next" aria-label="Next month">${ICON.chevR}</button></div>`;
+  const body = P.income <= 0
+    ? `<p class="muted">No income has been logged for ${fmtMonth(ym)} yet. Log it on the Month tab and a suggestion shows up here.</p>`
+    : `<div class="bbar${reached ? ' good' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="Put aside toward the goal"><i style="width:${pct}%"></i></div>
+       <p><b class="num">${money(P.done)}</b> <span class="muted">of ${money(P.goal)} put aside, from ${money(P.income)} of income received</span></p>
+       ${reached ? '<p><span class="pill good">Goal reached this month</span></p>' : `<div class="suggest"><div>Suggested: put <b class="num">${money(P.need)}</b> more aside</div>
+         <div class="actions">${P.parts.filter(p => p.suggest > 0).map(p => `<button class="btn primary sm" data-act="goal-put" data-kind="${p.kind}" data-amt="${p.suggest}">Put ${money(p.suggest)} in ${esc(p.label)}</button>`).join('')}</div></div>`}`;
+  return `<section class="card"><div class="card-h"><div><h2>Put ${P.pct}% of income aside</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Savings and investments together, from income you have received.</p></div>${nav}</div>
+    <div class="goalbody">${body}
+      <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
+}
 function viewGrowth() {
   const gs = GROWTH.map(([k, l, c]) => ({ k, l, c, g: growthFor(k, c) })), total = sum(gs, x => x.g.total);
   return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals. Money you log on the Savings and Investment lines under Variable expenses is counted here automatically.</p></div></div>
     <section class="card"><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
+    <div style="margin-top:16px">${goalCard()}</div>
     <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l, x.c)}</div>`).join('')}</div>`;
 }
 

@@ -215,6 +215,17 @@ button.bhead:hover .rname { color: var(--accent); }
 .gentries { padding: 0 18px 8px; }
 .out-n { color: var(--ink-2); }
 
+/* the 10% goal on Growth */
+.goalnav { display: flex; align-items: center; gap: 6px; }
+.goalnav .icon-btn { width: 34px; height: 34px; }
+.mlabel { font-weight: 600; font-size: 14px; min-width: 9ch; text-align: center; }
+.goalbody { display: grid; gap: 10px; padding: 0 18px 18px; }
+.goalbody p { margin: 0; }
+.bbar.good i { background: var(--good); }
+.suggest { display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.goalpct { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.goalpct .inp { width: 72px; min-height: 34px; padding: 5px 8px; }
+
 /* check planner */
 .planf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
 .planf .inp { width: auto; flex: 1 1 160px; max-width: 240px; min-width: 0; }

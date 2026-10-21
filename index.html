@@ -229,6 +229,17 @@ button.bhead:hover .rname { color: var(--accent); }
 .gentries { padding: 0 18px 8px; }
 .out-n { color: var(--ink-2); }
 
+/* the 10% goal on Growth */
+.goalnav { display: flex; align-items: center; gap: 6px; }
+.goalnav .icon-btn { width: 34px; height: 34px; }
+.mlabel { font-weight: 600; font-size: 14px; min-width: 9ch; text-align: center; }
+.goalbody { display: grid; gap: 10px; padding: 0 18px 18px; }
+.goalbody p { margin: 0; }
+.bbar.good i { background: var(--good); }
+.suggest { display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.goalpct { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.goalpct .inp { width: 72px; min-height: 34px; padding: 5px 8px; }
+
 /* check planner */
 .planf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
 .planf .inp { width: auto; flex: 1 1 160px; max-width: 240px; min-width: 0; }
@@ -1016,7 +1027,36 @@ function growthFor(kind, cat) {
   const manual = sum(mine, e => e.amount), monthly = sum(contribs, e => e.amount);
   return { manual, monthly, total: r2(manual + monthly), rows: [...mine, ...contribs].sort((a, b) => b.date.localeCompare(a.date)) };
 }
-function addGrowth(kind, amount, date, note) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}) }); touchGrowth(); }
+function addGrowth(kind, amount, date, note, adj) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}), ...(adj ? { adj: true } : {}) }); touchGrowth(); }
+
+/* ----- the goal: a share of income received goes to savings and investments together ----- */
+const growthPct = () => { const p = D.settings.growthPct; return p > 0 ? p : 10; };
+const incomeReceived = ym => sum(itemsFor(ym).filter(i => i.type === 'income' && i.done && !i.skip), i => i.amount);
+/* new money put aside in a month: amounts on the goal lines plus deposits entered on the Growth tab
+   (set-to-a-new-total adjustments and withdrawals are not new money) */
+function asideFor(kind, cat, ym) {
+  const monthly = sum(growthContribs(cat).filter(c => ymOf(c.date) === ym), c => c.amount);
+  const deposits = sum(D.growth.filter(e => e.kind === kind && !e.adj && e.amount > 0 && ymOf(e.date) === ym), e => e.amount);
+  return r2(monthly + deposits);
+}
+function growthPlan(ym) {
+  const pct = growthPct(), income = incomeReceived(ym), goal = r2(income * pct / 100);
+  const parts = GROWTH.map(([kind, label, cat]) => ({ kind, label, cat, done: asideFor(kind, cat, ym) }));
+  const done = sum(parts, p => p.done), need = Math.max(0, r2(goal - done));
+  // split the whole goal between the two in the ratio of the monthly amounts set on their goal lines (evenly when both are not set),
+  // then suggest what each is still short of its share; if one has gone past its share the rest goes to the other
+  const w = parts.map(p => { const t = D.templates.find(x => x.budget && x.goal && x.category === p.cat); return t ? amountFor(t, ym) : 0; });
+  const share = w[0] > 0 && w[1] > 0 ? w[0] / (w[0] + w[1]) : 0.5, tgt0 = r2(goal * share), tgt = [tgt0, r2(goal - tgt0)];
+  let sug = parts.map((p, i) => Math.max(0, r2(tgt[i] - p.done)));
+  const tot = sum(sug);
+  if (tot > need && tot > 0) {
+    sug = sug.map(x => r2(x * need / tot));
+    const diff = r2(need - sum(sug)), j = Math.max(0, sug.findIndex(x => x > 0));
+    if (diff) sug[j] = r2(sug[j] + diff);
+  }
+  parts.forEach((p, i) => { p.suggest = sug[i]; });
+  return { pct, income, goal, done, need, parts };
+}
 
 /* the paycheck typed into the Planner for a month */
 function setPlan(ym, amount, source) {
@@ -1340,7 +1380,7 @@ function loadSample() {
     list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
   });
   d.months[cur].plan = { amount: 2150, source: 'Paycheck' };
-  d.growth = [{ id: 'g1', kind: 'savings', date: start + '-02', amount: 6200, note: 'Starting balance' }, { id: 'g2', kind: 'savings', date: addMonths(start, 1) + '-15', amount: 400, note: 'Birthday money' }, { id: 'g3', kind: 'investing', date: start + '-02', amount: 14500, note: 'Starting balance' }, { id: 'g4', kind: 'investing', date: cur + '-01', amount: 820, note: 'Updated to match the app' }];
+  d.growth = [{ id: 'g1', kind: 'savings', date: start + '-02', amount: 6200, note: 'Starting balance', adj: true }, { id: 'g2', kind: 'savings', date: addMonths(start, 1) + '-15', amount: 400, note: 'Birthday money' }, { id: 'g3', kind: 'investing', date: start + '-02', amount: 14500, note: 'Starting balance', adj: true }, { id: 'g4', kind: 'investing', date: cur + '-01', amount: 820, note: 'Updated to match the app', adj: true }];
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);
@@ -1532,12 +1572,26 @@ function growthCard(kind, label, cat) {
       : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Add what you have now as a starting balance.</p>'}
   </section>`;
 }
+function goalCard() {
+  const ym = UI.ym, P = growthPlan(ym), pct = P.goal > 0 ? Math.min(100, P.done / P.goal * 100) : 0, reached = P.income > 0 && P.need <= 0;
+  const nav = `<div class="goalnav"><button class="icon-btn" data-act="month-prev" aria-label="Previous month">${ICON.chevL}</button><span class="mlabel">${fmtMonth(ym)}</span><button class="icon-btn" data-act="month-next" aria-label="Next month">${ICON.chevR}</button></div>`;
+  const body = P.income <= 0
+    ? `<p class="muted">No income has been logged for ${fmtMonth(ym)} yet. Log it on the Month tab and a suggestion shows up here.</p>`
+    : `<div class="bbar${reached ? ' good' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="Put aside toward the goal"><i style="width:${pct}%"></i></div>
+       <p><b class="num">${money(P.done)}</b> <span class="muted">of ${money(P.goal)} put aside, from ${money(P.income)} of income received</span></p>
+       ${reached ? '<p><span class="pill good">Goal reached this month</span></p>' : `<div class="suggest"><div>Suggested: put <b class="num">${money(P.need)}</b> more aside</div>
+         <div class="actions">${P.parts.filter(p => p.suggest > 0).map(p => `<button class="btn primary sm" data-act="goal-put" data-kind="${p.kind}" data-amt="${p.suggest}">Put ${money(p.suggest)} in ${esc(p.label)}</button>`).join('')}</div></div>`}`;
+  return `<section class="card"><div class="card-h"><div><h2>Put ${P.pct}% of income aside</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Savings and investments together, from income you have received.</p></div>${nav}</div>
+    <div class="goalbody">${body}
+      <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
+}
 function viewGrowth() {
   const gs = GROWTH.map(([k, l, c]) => ({ k, l, c, g: growthFor(k, c) })), total = sum(gs, x => x.g.total);
   return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals. Money you log on the Savings and Investment lines under Variable expenses is counted here automatically.</p></div></div>
     <section class="card"><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
+    <div style="margin-top:16px">${goalCard()}</div>
     <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l, x.c)}</div>`).join('')}</div>`;
 }
 
@@ -2216,6 +2270,12 @@ const ACTIONS = {
     const [gone] = D.growth.splice(i, 1); touchGrowth(); render();
     toast(`Removed ${money(gone.amount)}.`, { action: 'Undo', fn: () => { D.growth.push(gone); touchGrowth(); render(); } });
   },
+  'goal-put': el => {
+    const kind = el.dataset.kind, amt = parseFloat(el.dataset.amt), row = GROWTH.find(x => x[0] === kind);
+    if (!(amt > 0)) return;
+    addGrowth(kind, amt, entryDate(UI.ym), `Suggested ${growthPct()}%`); render();
+    toast(`Put ${money(amt)} in ${row[1]}.`, { action: 'Undo', fn: () => { const i = D.growth.findIndex(e => e.kind === kind && e.amount === r2(amt) && e.note === `Suggested ${growthPct()}%`); if (i >= 0) { D.growth.splice(i, 1); touchGrowth(); render(); } } });
+  },
   'growth-more': el => { UI.gAll = UI.gAll === el.dataset.kind ? null : el.dataset.kind; render(); },
   'pick-exp': el => { UI.exp = el.dataset.id; render(); const f = $('.spendf input[name=amount]'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } },
   'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
@@ -2329,6 +2389,7 @@ const CHANGE = {
   fu: el => { UI.fu = el.checked; UI.txLimit = 100; render(); },
   rm: el => { UI.rm = el.value; render(); },
   exp: el => { UI.exp = el.value; },
+  gpct: el => { const v = parseFloat(el.value); if (v > 0 && v <= 100) { D.settings.growthPct = v; touchMeta(); } render(); },
   range: el => { UI.range = el.value; render(); },
   currency: el => { D.settings.currency = el.value; touchMeta(); render(); },
   'imp-map': el => { IM.map[el.dataset.k] = parseInt(el.value, 10); recomputeImport(); openImportDialog(); },
@@ -2362,7 +2423,7 @@ document.addEventListener('submit', e => {
     if (isNaN(t)) { toast('Enter the new total.'); return; }
     const diff = r2(t - growthFor(kind, row[2]).total);
     if (!diff) { toast('That is already the total.'); return; }
-    addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`);
+    addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`, true);
     render(); toast(`${row[1]} is now ${money(t)}.`);
   }
   else if (e.target.classList.contains('planf')) {
