@@ -2,10 +2,9 @@
 
 A small web app for tracking monthly bills and income, ticking things off as they are paid, and checking them against bank statements.
 
-- **Month**: this month's checklist, built from your recurring list. Tick bills as paid and income as received. See what is still to pay, what is overdue, and what is left after bills. Bills can be added, edited, stopped or deleted from the Month tab. A changed amount or due date applies from the chosen month on (tick "Only this month" for a one-off move), so past months keep what they had and ticked-off bills stay ticked. Income can be logged in one line (source, amount, date) from the Income card. Spending budgets (like groceries) keep a running total of what you enter against a monthly limit and turn red when you go over.
-- **Obligations**: the running list of everything that repeats (monthly, twice a month, every 2 weeks, weekly, quarterly, twice a year, yearly), each with a due day, category and optional statement text for matching. **Add budget** creates a monthly spending limit instead of a fixed bill.
-- **Statements**: add CSV, OFX/QFX or PDF statements. Bills are matched to statement lines (review, then apply), and everything else is categorised. Past months work too: set a bill's start month earlier.
-- **Spending**: where the money went, by category and by month, plus recurring charges that are not on your list yet.
+- **Month**: this month's checklist, built from your recurring list. Tick a bill off and it moves into a Done group. Tap any bill or income row to change its amount or due date in one sheet, either for this and the following months or for this month only. Earlier months keep what they had. Log income in one line (source, amount, date); a source that matches an expected paycheck ticks it off. Spending budgets (like groceries) keep a running total of what you enter against a monthly limit and turn red when you go over.
+- **Bills**: the list of everything that repeats (monthly, twice a month, every 2 weeks, weekly, quarterly, twice a year, yearly). **+ Add** creates a bill, income or a spending budget. Category, start and end months and statement text live under More options.
+- **Bank**: add CSV, OFX/QFX or PDF statements. Spending shows where the money went by category and month, Reconcile matches bills to statement lines (review, then apply), Transactions lists every line, Files lists what you imported.
 
 No framework, no build dependencies beyond Python 3, and nothing is sent anywhere. Statement files are read inside the page and only the date, description and amount of each line are saved.
 
@@ -25,7 +24,7 @@ Publish the page as an Artifact with these capabilities, then use the Share menu
 { "db": { "rules": [ { "path": "ledger", "read": "view", "write": "owner" } ] }, "user": {}, "downloads": true }
 ```
 
-Only the owner can write to the ledger. A viewer sees Month, Obligations and Spending, updated live, with every edit control removed. The Statements tab is hidden for viewers, although the underlying lines are readable by anyone you share with, so share only with people you trust with your finances. Invite by email; do not use a public link.
+Only the owner can write to the ledger. A viewer sees Month, Bills and the spending summary on the Bank tab, updated live, with every edit control removed. Importing and reconciling are hidden for viewers, although the underlying lines are readable by anyone you share with, so share only with people you trust with your finances. Invite by email; do not use a public link.
 
 Data saved by the first version (in the owner's private space) is copied to the shared ledger automatically the first time the owner opens the page.
 

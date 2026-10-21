@@ -111,6 +111,8 @@ button { cursor: pointer; }
 .btn.sm { min-height: 34px; padding: 6px 11px; font-size: 13px; }
 .btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
 .btn.ghost { border-color: transparent; background: none; color: var(--accent); }
+.btn.ghost.bad { color: var(--bad); }
+.sheet-more { border-top: 1px solid var(--line-2); padding-top: 8px; gap: 2px 6px; }
 .btn.ghost:hover { background: var(--accent-soft); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .icon-btn { width: 40px; height: 40px; display: inline-grid; place-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; color: var(--ink-2); }
@@ -134,7 +136,9 @@ button { cursor: pointer; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .stat { padding: 16px 18px; border-left: 1px solid var(--line-2); min-width: 0; }
 .stat:first-child { border-left: 0; }
-@media (max-width: 520px) { .stat:nth-child(odd) { border-left: 0; } .stat:nth-child(n+3) { border-top: 1px solid var(--line-2); } }
+@media (max-width: 520px) { .stats:not(.three) .stat:nth-child(odd) { border-left: 0; } .stats:not(.three) .stat:nth-child(n+3) { border-top: 1px solid var(--line-2); } }
+.stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 520px) { .stats.three .stat { padding: 14px 10px 14px 12px; } .stats.three .stat .val { font-size: 19px; } .stats.three .stat .sub { font-size: 12px; } .stats.three .stat .lbl { font-size: 11px; letter-spacing: .04em; } }
 .stat .lbl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .stat .val { font-family: var(--f-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; overflow-wrap: anywhere; }
 .stat .sub { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
@@ -150,28 +154,33 @@ button { cursor: pointer; }
 
 /* checklist rows */
 .list { list-style: none; margin: 0; padding: 0; }
-.row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding: 4px 18px; border-top: 1px solid var(--line-2); }
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 2px 10px 2px 18px; border-top: 1px solid var(--line-2); }
 .list > .row:first-child { border-top: 1px solid var(--line-2); }
 .chk { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--muted); background: var(--surface); display: grid; place-items: center; padding: 0; color: transparent; flex: none; }
 .chk:hover:not([disabled]) { border-color: var(--accent); }
 .chk[disabled] { cursor: default; }
 .chk[aria-checked="true"] { background: var(--good); border-color: var(--good); color: #fff; }
 .chk svg { width: 16px; height: 16px; }
-.rmain { text-align: left; background: none; border: 0; padding: 10px 0; min-width: 0; display: grid; gap: 1px; border-radius: 8px; }
+.rmain { text-align: left; background: none; border: 0; padding: 10px 8px; min-width: 0; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: center; border-radius: 10px; }
+button.rmain:hover { background: var(--surface-2); }
+.rtext { display: grid; gap: 1px; min-width: 0; }
+.grp { padding: 10px 18px 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-top: 1px solid var(--line-2); list-style: none; }
+.alldone { padding: 14px 18px; color: var(--ink-2); list-style: none; }
+.radios { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0; }
+.radios legend { padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.checkline input[type=radio] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+details.more { border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; }
+details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-size: 14px; color: var(--accent); }
+.more-b { display: grid; gap: 14px; padding: 4px 0 14px; }
+.bankbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .rname { font-weight: 600; overflow-wrap: anywhere; }
 .rmeta { font-size: 13px; color: var(--ink-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ramt { font-family: var(--f-data); font-variant-numeric: tabular-nums; font-weight: 500; text-align: right; white-space: nowrap; }
-.ramt.edit { background: none; border: 0; border-bottom: 1px dashed var(--muted); border-radius: 0; padding: 4px 0 2px; display: inline-flex; gap: 6px; align-items: center; color: inherit; }
-.ramt.edit svg { color: var(--muted); flex: none; }
-.ramt.edit:hover { border-bottom-color: var(--accent); }
-.ramt.edit:hover svg { color: var(--accent); }
 .row.paid .rname, .row.paid .ramt { color: var(--muted); }
 .row.paid .rname { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
 .row.skip .rname, .row.skip .ramt { color: var(--muted); font-style: italic; }
 .row.late .due { color: var(--bad); font-weight: 600; }
 .row.soon .due { color: var(--warn); font-weight: 600; }
-.detail { grid-column: 1 / -1; padding: 4px 0 14px 38px; display: grid; gap: 12px; }
-.detail .fgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .card-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line-2); font-size: 14px; }
 .card-f .total { font-weight: 600; }
 
@@ -1272,7 +1281,7 @@ function loadSample() {
 function autoCategoryFor(d, desc, amt) { const keep = D; D = d; const c = autoCategory(desc, amt); D = keep; return c; }
 
 /* ---------- views ---------- */
-const UI = { tab: 'month', ym: thisMonth(), open: null, hidePaid: false, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
+const UI = { tab: 'month', ym: thisMonth(), open: null, sub: 'spending', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
@@ -1286,7 +1295,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['obligations', 'Obligations'], ['statements', 'Statements'], ['spending', 'Spending']];
+const TABS = [['month', 'Month'], ['bills', 'Bills'], ['bank', 'Bank']];
 
 function chromeHTML() {
   return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
@@ -1302,7 +1311,7 @@ const catOptions = (sel, cats = D.cats) => cats.map(c => `<option${c === sel ? '
 
 /* ----- Month ----- */
 function viewMonth() {
-  const ym = UI.ym, cur = thisMonth(), items = itemsFor(ym), S = summarize(items);
+  const ym = UI.ym, cur = thisMonth(), items = itemsFor(ym), S = summarize(items), ro = RO();
   const nav = `<div class="monthbar">
     <button class="icon-btn" data-act="month-prev" aria-label="Previous month">${ICON.chevL}</button>
     <h1 class="mtitle">${fmtMonth(ym)}</h1>
@@ -1311,7 +1320,7 @@ function viewMonth() {
     ${ym !== cur ? `<button class="btn sm" data-act="month-today">Back to ${fmtMonth(cur)}</button>` : ''}
   </div>`;
   if (!D.templates.length && !items.length) {
-    return nav + `<section class="card">${RO() ? emptyState('Nothing here yet', 'Bills and income will appear here once they have been added.') : emptyState('Start with your monthly bills', 'List the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
+    return nav + `<section class="card">${ro ? emptyState('Nothing here yet', 'Bills and income will appear here once they have been added.') : emptyState('Start with your monthly bills', 'Add the bills that repeat and the income you expect. Each month then gets its own checklist, and you tick things off as they are paid.',
       `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add a bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
@@ -1319,129 +1328,101 @@ function viewMonth() {
   const over = S.budgets.filter(i => i.spent > i.amount + 0.005);
   const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
-    <div class="stats">
-      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(openBills, 'bill')} left${S.budgetLeft > 0 ? ` + ${money(S.budgetLeft)} still to spend` : ''}</div></div>
-      <div class="stat"><div class="lbl">Paid so far</div><div class="val">${money(S.billsPaid)}</div><div class="sub">${S.billsDone} of ${S.bills.length} bills${S.budgets.length ? ` + ${money(S.budgetSpent)} spent` : ''}</div></div>
-      <div class="stat"><div class="lbl">Income received</div><div class="val">${money(S.incomeGot)}</div><div class="sub">of ${money(S.incomeTotal)} expected</div></div>
-      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">expected income minus bills and budgets</div></div>
+    <div class="stats three">
+      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(openBills, 'bill')} left${S.budgetLeft > 0 ? ` + ${money(S.budgetLeft)} to spend` : ''}</div></div>
+      <div class="stat"><div class="lbl">Income</div><div class="val">${money(S.incomeGot)}</div><div class="sub">of ${money(S.incomeTotal)} expected</div></div>
+      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">income minus bills and budgets</div></div>
     </div>
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
-      <div class="cap"><span>${pct}% of this month's money paid or spent</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
+      <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
-  const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
-  const budgetCard = buds.length ? `<section class="card c-bud"><div class="card-h"><div><h2>Spending budgets</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter amounts as you spend them. The bar turns red if you go over.</p>'}</div></div>
+  const group = (list, allDone) => {
+    const open = list.filter(i => !i.done && !i.skip), done = list.filter(i => i.done || i.skip);
+    return open.map(rowHTML).join('') + (allDone && !open.length && done.length ? '<li class="alldone">Everything is paid. Nice.</li>' : '') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
+  };
+  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Spending budgets</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter what you spend. The bar turns red if you go over.</p>'}</div></div>
     <ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
-  const billsCard = `<section class="card c-bills">
-    <div class="card-h"><div><h2>Bills</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap an amount to change it. Tap a name for more.</p>'}</div>
-      <div class="actions"><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label>${RO() ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div></div>
-    ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
+  const billsCard = `<section class="card">
+    <div class="card-h"><div><h2>Bills</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap a bill to change it.</p>'}</div>${ro ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div>
+    ${bills.length ? `<ul class="list">${group(bills, true)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
     <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span></div>
   </section>`;
   const incNames = [...new Set([...D.templates.filter(t => t.type === 'income').map(t => t.name), ...Object.values(D.months).flatMap(m => m.extras.filter(x => x.type === 'income').map(x => x.name))])].slice(0, 30);
-  const incForm = RO() ? '' : `<form class="incf" autocomplete="off">
+  const incForm = ro ? '' : `<form class="incf" autocomplete="off">
       <input name="source" class="inp" list="incsrc" placeholder="Source, e.g. Salary" aria-label="Income source" required>
       <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount received" required>
       <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date received">
       <button class="btn primary sm" type="submit">Add income</button>
       <datalist id="incsrc">${incNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist></form>`;
-  const incCard = `<section class="card c-inc">
-    <div class="card-h"><div><h2>Income</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives. A source that matches an expected paycheck ticks it off.</p>'}</div></div>
+  const incCard = `<section class="card">
+    <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div></div>
     ${incForm}
-    ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
+    ${inc.length ? `<ul class="list">${group(inc, false)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
   </section>`;
-  const note = RO() ? '' : '<p class="muted" style="font-size:14px;margin-top:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>';
   // bills first, then income, with the spending budgets in their own section at the bottom
-  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}${note}`;
+  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}`;
 }
 /* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
 function budgetHTML(b, ym) {
-  const ro = RO(), cur = thisMonth(), tid = b.tmpl.id, k = esc(b.key);
+  const ro = RO(), tid = b.tmpl.id, k = esc(b.key);
   const over = b.spent > b.amount + 0.005, pct = b.amount > 0 ? Math.min(100, b.spent / b.amount * 100) : (b.spent > 0 ? 100 : 0);
   const state = over ? 'over' : pct >= 85 ? 'near' : 'ok', left = r2(b.amount - b.spent);
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
   const expanded = ro || UI.open === b.key;
-  const defDate = entryDate(ym);
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
   return `<li class="brow ${state}">
     <div class="bhead"><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">of ${money(b.amount)}</span></span></div>
     <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
     <div class="bsub"><span class="pill ${over ? 'bad' : state === 'near' ? 'warn' : ''}">${over ? `${money(-left)} over budget` : `${money(left)} left`}</span>
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button>`}</div>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change budget</button>`}</div>
     ${ro ? '' : `<form class="spendf" data-tid="${tid}" autocomplete="off">
       <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount spent on ${esc(b.name)}" required>
       <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
-      <input name="date" class="inp" type="date" value="${defDate}" aria-label="Date">
+      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
       <button class="btn primary sm" type="submit">Add</button></form>`}
-    ${expanded ? `<div class="bentries">${list}${ro ? '' : `<div class="fgrid" style="margin-top:8px"><label class="field">Budget this month<input class="num" type="number" step="0.01" min="0" value="${b.amount}" data-chg="amount" data-key="${k}"><small>Changes this month only. Edit the budget under Obligations to change every month.</small></label></div>
-      <div class="actions" style="margin-top:8px"><button class="btn sm" data-act="edit-tmpl" data-id="${tid}">Edit budget…</button></div>`}</div>` : ''}
+    ${expanded ? `<div class="bentries">${list}</div>` : ''}
   </li>`;
 }
+/* a bill or income row: tick it off with the box, tap the rest to change it */
 function rowHTML(it) {
-  const ro = RO(), st = itemStatus(it), open = UI.open === it.key && !ro, verb = it.type === 'income' ? 'received' : 'paid';
+  const ro = RO(), st = itemStatus(it), verb = it.type === 'income' ? 'received' : 'paid';
   const link = it.txn ? txnById(it.txn) : null, dis = ro || it.skip, tag = ro ? 'div' : 'button';
   return `<li class="row ${st}">
     <button class="chk" role="checkbox" aria-checked="${it.done}"${dis ? ' disabled' : ` data-act="toggle" data-key="${esc(it.key)}"`} aria-label="${esc(it.name)} ${it.done ? verb : 'not ' + verb}">${ICON.check}</button>
-    <${tag} class="rmain"${ro ? '' : ` data-act="open" data-key="${esc(it.key)}" aria-expanded="${open}"`}>
-      <span class="rname">${esc(it.name)}${it.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-      <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${it.type === 'bill' && it.category ? `<span aria-hidden="true">·</span><span>${esc(it.category)}</span>` : ''}${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}${ro && it.note ? `<span aria-hidden="true">·</span><span>${esc(it.note)}</span>` : ''}</span>
+    <${tag} class="rmain"${ro ? '' : ` data-act="edit-item" data-key="${esc(it.key)}"`}>
+      <span class="rtext"><span class="rname">${esc(it.name)}</span>
+        <span class="rmeta"><span class="due">${esc(dueText(it))}</span>${link ? `<span class="pill good">${ICON.link} on statement</span>` : ''}${it.note ? `<span aria-hidden="true">·</span><span>${esc(it.note)}</span>` : ''}</span></span>
+      <span class="ramt">${money(it.amount)}</span>
     </${tag}>
-    ${ro ? `<span class="ramt">${money(it.amount)}</span>` : `<button class="ramt edit" data-act="open" data-focus="amount" data-key="${esc(it.key)}" aria-label="Change the amount for ${esc(it.name)}">${money(it.amount)}${ICON.pencil}</button>`}
-    ${open ? detailHTML(it, link) : ''}
   </li>`;
 }
-function detailHTML(it, link) {
-  const k = esc(it.key), verb = it.type === 'income' ? 'Received' : 'Paid';
-  let linkBlock = '';
-  if (D.txns.length) {
-    const cands = candidatePool(UI.ym).map(t => ({ t, s: scoreMatch(it, t).s })).filter(x => x.s >= 0).sort((a, b) => b.s - a.s).slice(0, 25).map(x => x.t);
-    if (link && !cands.includes(link)) cands.unshift(link);
-    linkBlock = `<label class="field">Statement line<select data-chg="link" data-key="${k}"><option value="">${link ? 'Unlink' : 'Not linked'}</option>${cands.map(t => `<option value="${t.id}"${link && link.id === t.id ? ' selected' : ''}>${fmtShort(t.date)} · ${esc(t.desc.slice(0, 40))} · ${money(Math.abs(t.amt))}</option>`).join('')}</select><small>Linking marks it ${verb.toLowerCase()} using the real date and amount.</small></label>`;
-  }
-  return `<div class="detail">
-    <div class="fgrid">
-      <label class="field">This month's amount<input class="num" type="number" step="0.01" min="0" value="${it.amount}" data-chg="amount" data-key="${k}"></label>
-      <div class="field"><label for="due-input">${it.type === 'income' ? 'Expected on' : 'Due date'}</label><input id="due-input" type="date" value="${esc(it.due)}" data-chg="duedate" data-key="${k}">
-        ${it.rec ? `<label class="checkline" style="font-weight:400"><input id="due-once" type="checkbox"> Only this month</label><small>Otherwise the new date is used for every month from ${esc(fmtMonth(UI.tab === 'statements' ? reconcileMonth() : UI.ym))} on.</small>` : ''}</div>
-      ${it.done ? `<label class="field">${verb} on<input type="date" value="${esc(it.doneDate || it.due)}" data-chg="paiddate" data-key="${k}"></label>` : ''}
-      <label class="field">Note<input type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" data-chg="note" data-key="${k}"></label>
-    </div>
-    ${linkBlock}
-    <div class="actions">
-      ${it.rec ? `<button class="btn sm" data-act="edit-amount" data-id="${it.tmpl.id}">Change amount from now on…</button><button class="btn sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit ${it.type === 'income' ? 'income' : 'bill'}…</button><button class="btn sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button class="btn sm danger" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button class="btn sm danger" data-act="del-extra" data-key="${k}">Delete this item</button>`}
-    </div>
-  </div>`;
-}
 
-/* ----- Obligations ----- */
-function viewObligations() {
-  const cur = thisMonth();
+/* ----- Bills (everything that repeats) ----- */
+function viewBills() {
+  const cur = thisMonth(), ro = RO();
   const live = D.templates.filter(t => !t.end || t.end >= cur);
   const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
   const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
-  const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
-    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button><button class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">Add budget</button></div>'}</div>`;
-  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
+  const head = `<div class="pagehead"><div><h1>Bills and income</h1><p class="lede">${ro ? 'What repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list.'}</p></div>
+    ${ro ? '' : '<div class="actions"><button class="btn primary" data-act="add-menu">+ Add</button></div>'}</div>`;
+  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', ro ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks, and choose how often each one repeats.', ro ? '' : `<button class="btn primary" data-act="add-menu">+ Add</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && fieldFor(t, cur, 'anchor') ? +fieldFor(t, cur, 'anchor').slice(8, 10) : (fieldFor(t, cur, 'day') || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
-  const byCat = {};
-  bills.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + monthlyEquiv(t); });
-  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]), maxC = cats.length ? cats[0][1] : 1;
   const diff = r2(incMo - billsMo);
   const ended = D.templates.filter(t => t.end && t.end < cur);
   return sampleBanner() + head + `<div class="stack">
-    <section class="card"><div class="stats">
-      <div class="stat lead"><div class="lbl">Bills per month</div><div class="val">${money(billsMo)}</div><div class="sub">${plural(bills.length, 'recurring bill')}</div></div>
+    <section class="card"><div class="stats three">
+      <div class="stat lead"><div class="lbl">Bills per month</div><div class="val">${money(billsMo)}</div><div class="sub">${plural(bills.length, 'item')}</div></div>
       <div class="stat"><div class="lbl">Income per month</div><div class="val">${money(incMo)}</div><div class="sub">${plural(inc.length, 'source')}</div></div>
       <div class="stat"><div class="lbl">Difference</div><div class="val${diff < 0 ? ' neg' : ''}">${money(diff)}</div><div class="sub">${diff < 0 ? 'bills exceed income' : 'income after bills'}</div></div>
-    </div><p class="muted" style="padding:0 18px 14px;font-size:13px">Weekly, twice-a-month and yearly items are averaged into a monthly figure.</p></section>
+    </div></section>
     <div class="cols" style="margin-top:0">
       <section class="card"><div class="card-h"><h2>Bills</h2></div>${bills.length ? rows(bills) : '<p class="muted" style="padding:6px 18px 16px">No recurring bills.</p>'}</section>
       <div class="stack">
         <section class="card"><div class="card-h"><h2>Income</h2></div>${inc.length ? rows(inc) : '<p class="muted" style="padding:6px 18px 16px">No recurring income.</p>'}</section>
-        ${cats.length ? `<section class="card"><div class="card-h"><h2>Where bills go</h2></div><div class="card-b">${cats.map(([c, v]) => `<div class="cbar"><span class="nm">${esc(c)}</span><span class="bar"><i style="width:${Math.max(2, v / maxC * 100)}%"></i></span><span class="amt">${money(v)}</span></div>`).join('')}</div></section>` : ''}
-        ${ended.length ? `<section class="card"><div class="card-h"><h2>Ended</h2></div>${rows(ended)}</section>` : ''}
+        ${ended.length ? `<section class="card"><div class="card-h"><h2>Stopped</h2></div>${rows(ended)}</section>` : ''}
       </div>
     </div></div>`;
 }
@@ -1449,22 +1430,23 @@ function tmplRow(t) {
   const eq = t.freq !== 'monthly' ? `about ${money(monthlyEquiv(t))} / month` : '';
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
-    <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-    <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span><span class="rname">${esc(t.name)}</span>
+    <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(amountFor(t, thisMonth()))}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
 
-/* ----- Statements ----- */
-function viewStatements() {
-  const sub = (id, label) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${label}</button>`;
-  const head = `<div class="pagehead"><div><h1>Bank statements</h1><p class="lede">Add statements to check what was really paid and to see where the rest of the money went.</p></div></div>
-    <div class="drop" id="drop"><h3>Add statements</h3>
-      <p>Drop CSV, OFX/QFX or PDF files here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
-      <button class="btn primary" data-act="choose-files">Choose files</button></div>`;
-  if (!D.txns.length) return sampleBanner() + head + `<section class="card" style="margin-top:16px">${emptyState('No transactions yet', 'Once you add a statement, bills are matched against it automatically and everything else is sorted into categories.', (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
-  const seg = `<div class="actions" style="margin:16px 0"><div class="seg" role="group" aria-label="Statement views">${sub('reconcile', 'Reconcile')}${sub('transactions', 'Transactions')}${sub('files', 'Files')}</div></div>`;
-  return sampleBanner() + head + seg + (UI.sub === 'transactions' ? viewTxns() : UI.sub === 'files' ? viewFiles() : viewReconcile());
+/* ----- Bank (statements and spending in one place) ----- */
+const BANK_SUBS = [['spending', 'Spending'], ['reconcile', 'Reconcile'], ['transactions', 'Transactions'], ['files', 'Files']];
+function viewBank() {
+  if (RO()) return viewSpending();
+  if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Bank</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
+    <div class="drop" id="drop"><h3>Add a statement</h3>
+      <p>Drop a CSV, OFX/QFX or PDF file here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
+      <div class="actions" style="justify-content:center"><button class="btn primary" data-act="choose-files">Choose files</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div></div>`;
+  const bar = `<div class="bankbar"><div class="seg" role="group" aria-label="Bank views">${BANK_SUBS.map(([id, l]) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${l}</button>`).join('')}</div><button class="btn primary sm" data-act="choose-files">+ Add statement</button></div>`;
+  const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? viewTxns() : UI.sub === 'files' ? viewFiles() : viewSpending();
+  return sampleBanner() + bar + body;
 }
 function reconcileMonth() {
   const ms = txnMonths(), cur = thisMonth();
@@ -1508,7 +1490,7 @@ function viewReconcile() {
         act = c.length ? `<select class="inp sm" data-chg="link" data-key="${esc(i.key)}" aria-label="Link a statement line to ${esc(i.name)}" style="max-width:150px"><option value="">Link a line…</option>${c.map(y => `<option value="${y.x.id}">${fmtShort(y.x.date)} · ${esc(y.x.desc.slice(0, 30))} · ${money(Math.abs(y.x.amt))}</option>`).join('')}</select>` : '';
       }
       return `<div class="mrow"><div><div class="nm">${esc(i.name)}</div><div class="muted num" style="font-size:13px">${i.type === 'income' ? 'Expected' : 'Due'} ${fmtShort(i.due)} · ${money(i.planned)}</div></div><div class="mid">${mid}</div><div>${act}</div></div>`;
-    }).join('') : `<p class="muted" style="padding:6px 18px 16px">No bills or income are scheduled for ${fmtMonth(ym)}. Add them under Obligations, or give a bill an earlier start month so it shows up here.</p>`}</section>`;
+    }).join('') : `<p class="muted" style="padding:6px 18px 16px">No bills or income are scheduled for ${fmtMonth(ym)}. Add them under Bills, or give a bill an earlier start month so it shows up here.</p>`}</section>`;
   const shownU = unplanned.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
   const unCard = `<section class="card"><div class="card-h"><h2>Everything else in ${fmtMonth(ym)}</h2><button class="btn sm" data-act="show-month-txns" data-ym="${ym}">See all ${plural(mtx.length, 'line')}</button></div>
     ${shownU.length ? `<div class="tbl-wrap"><table class="tbl stk"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody>${shownU.map(t => `<tr><td class="num c-date">${fmtShort(t.date)}</td><td class="desc c-desc">${esc(t.desc)}</td>
@@ -1575,7 +1557,7 @@ function monthChart(by, W) {
 function viewSpending() {
   const head = `<div class="pagehead"><div><h1>Where the money goes</h1><p class="lede">Built from the statements you have added. Transfers are left out, and refunds reduce the category they belong to.</p></div>
     <label class="field" style="grid-auto-flow:column;align-items:center;gap:10px">Period<select class="inp sm" data-chg="range" style="min-width:150px">${RANGES.map(([v, l]) => `<option value="${v}"${UI.range === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>`;
-  if (!D.txns.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : '<button class="btn primary" data-act="tab" data-tab="statements">Add a statement</button>' + (isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''))}</section>`;
+  if (!D.txns.length) return head + `<section class="card">${emptyState('Nothing to show yet', RO() ? 'Spending shows up here once statements have been added.' : 'Add a bank statement and every line is sorted into a category, so you can see what the month really cost.', RO() ? '' : '<button class="btn primary" data-act="choose-files">Add a statement</button>')}</section>`;
   const { from, to } = rangeFor(UI.range), st = spendStats(from, to), months = Object.keys(st.byMonth);
   let act = months.filter(m => st.byMonth[m].in || st.byMonth[m].out);
   if (!act.length) act = months;
@@ -1583,7 +1565,7 @@ function viewSpending() {
   const label = first === last ? fmtMonth(first) : `${fmtMonth(first)} to ${fmtMonth(last)}`;
   const chartBy = {};
   months.slice(months.indexOf(first), months.indexOf(last) + 1).forEach(m => { chartBy[m] = st.byMonth[m]; });
-  if (!st.count) return sampleBanner() + head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : '<button class="btn" data-act="tab" data-tab="statements">Go to statements</button>')}</section>`;
+  if (!st.count) return head + `<section class="card">${emptyState('No transactions in ' + label, 'Pick a different period, or add the statement for this month.', RO() ? '' : '<button class="btn" data-act="choose-files">Add a statement</button>')}</section>`;
   const net = r2(st.income - st.spent), active = act.length || 1;
   const cats = Object.entries(st.byCat).filter(([, v]) => Math.abs(v) >= .005).sort((a, b) => b[1] - a[1]);
   const pos = cats.filter(([, v]) => v > 0), maxC = pos.length ? pos[0][1] : 1;
@@ -1605,14 +1587,14 @@ function viewSpending() {
   const merchCard = merch.length ? `<section class="card"><div class="card-h"><h2>Biggest merchants</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Merchant</th><th class="r">Visits</th><th class="r">Total</th></tr></thead><tbody>${merch.map(m => `<tr><td class="desc">${esc(titleCase(m.key))}</td><td class="r num">${m.n}</td><td class="r num">${money(m.total)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   UI.rec = RO() ? [] : detectRecurring();
   const recCard = UI.rec.length ? `<section class="card"><div class="card-h"><h2>Looks like a recurring bill</h2></div>
-    <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not on your obligations list yet.</p>
+    <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not on your bills list yet.</p>
     ${UI.rec.map((r, i) => `<div class="rec"><div><div class="rname">${esc(r.name)}</div><div class="rmeta"><span class="num">about ${money(r.amount)}</span><span aria-hidden="true">·</span><span>seen in ${r.months} months</span><span aria-hidden="true">·</span><span>${esc(r.cat)}</span></div></div><button class="btn sm" data-act="add-recurring" data-idx="${i}">Add as bill</button></div>`).join('')}</section>` : '';
-  return sampleBanner() + head + `<div class="stack">${kpis}${catCard}${chartCard}<div class="cols" style="margin-top:0"><div class="stack">${merchCard}</div><div class="stack">${recCard}</div></div></div>`;
+  return head + `<div class="stack">${kpis}${catCard}${chartCard}<div class="cols" style="margin-top:0"><div class="stack">${merchCard}</div><div class="stack">${recCard}</div></div></div>`;
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), obligations: viewObligations, statements: viewStatements, spending: viewSpending };
-const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'statements'));
+const VIEWS = { month: () => sampleBanner() + viewMonth(), bills: viewBills, bank: viewBank };
+const visibleTabs = () => TABS;
 function render() {
   const tabs = $('#tabs');
   if (Store.mode === 'locked') {
@@ -1701,25 +1683,26 @@ let TF = null;
 function openTemplateDialog(id, preset = {}, opts = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
-  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
+  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
   TF.ctx = preset.ctx || (UI.tab === 'month' ? UI.ym : thisMonth());
   if (t) { TF.amount = amountFor(t, TF.ctx); TF.day = fieldFor(t, TF.ctx, 'day'); TF.day2 = fieldFor(t, TF.ctx, 'day2'); TF.anchor = fieldFor(t, TF.ctx, 'anchor') || TF.anchor; }
   const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
-  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
+  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : '')}
     <div class="dlg-b">
       <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
         <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
-      ${t ? `<label class="field">Apply a new amount or due day to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount or the due day.</small></label>` : ''}
-      <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
-        ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
-      ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
-      <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months you want to reconcile.</small></label>
-        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when it stops. Older months keep their history.</small></label></div>
-      ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
-      ${type === 'bill' && !budget ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
+      ${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
+      <details class="more"><summary>More options</summary><div class="more-b">
+        ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select><small>Used for the spending breakdown. Left as Other, it is guessed from the name.</small></label>` : ''}
+        <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months.</small></label>
+          <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set when it stops. Older months keep their history.</small></label></div>
+        ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
+        ${t ? `<label class="field">A new amount or due day applies to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select></label>` : ''}
+      </div></details>
     </div>
-    <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
+    <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Remove…</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save' : 'Add ' + word}</button></div></form>`);
   if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
   if (t) $('#tf-del').onclick = () => askDeleteTemplate(t.id);
   if (opts.focus) { const f = $('#tf-' + opts.focus); if (f) { f.focus(); if (f.select) f.select(); } }
@@ -1736,7 +1719,6 @@ function readTmplForm(soft) {
   if (g('tf-start') !== undefined) TF.start = g('tf-start');
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
-  if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
   if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
@@ -1747,9 +1729,8 @@ function submitTemplate() {
   if (!TF.name || isNaN(amount) || amount < 0) { toast('Add a name and an amount.'); return; }
   if ((TF.freq === 'weekly' || TF.freq === 'biweekly') && !TF.anchor) { toast('Pick a date it lands on.'); return; }
   const ok = /^\d{4}-\d{2}$/;
-  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
+  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category && TF.category !== 'Other' ? TF.category : (TF.editing ? 'Other' : guessCategory(TF.name))), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
-  if (!obj.autopay) delete obj.autopay;
   if (TF.budget) obj.budget = true;
   let t;
   if (TF.editing) {
@@ -1776,6 +1757,70 @@ function submitTemplate() {
   if (link) { const it = itemsFor(ymOf(link.date)).find(i => i.tmpl && i.tmpl.id === t.id); if (it) linkItem(ymOf(link.date), it, link); }
   render();
   toast(TF.editing ? 'Saved.' : `Added ${t.name}.`);
+}
+
+const guessCategory = name => { const c = autoCategory(name, -1); return NON_SPEND.has(c) ? 'Other' : c; };
+
+/* ---------- one sheet to change a bill or income row ---------- */
+function openItemDialog(key) {
+  const ym = curYm(), it = findItem(key, ym); if (!it) return;
+  const k = esc(key), verb = it.type === 'income' ? 'received' : 'paid', link = it.txn ? txnById(it.txn) : null;
+  let linkBlock = '';
+  if (D.txns.length) {
+    const cands = candidatePool(ym).map(t => ({ t, s: scoreMatch(it, t).s })).filter(x => x.s >= 0).sort((a, b) => b.s - a.s).slice(0, 25).map(x => x.t);
+    if (link && !cands.includes(link)) cands.unshift(link);
+    linkBlock = `<label class="field">Statement line<select id="if-link"><option value="">${link ? 'Unlink' : 'Not linked'}</option>${cands.map(t => `<option value="${t.id}"${link && link.id === t.id ? ' selected' : ''}>${fmtShort(t.date)} · ${esc(t.desc.slice(0, 40))} · ${money(Math.abs(t.amt))}</option>`).join('')}</select><small>Linking marks it ${verb} with the real date and amount.</small></label>`;
+  }
+  openModal(`<form id="itf" data-key="${k}">${dlgHead(esc(it.name), `${esc(fmtMonth(ym))}${it.rec ? ' · ' + esc(it.budget ? 'budget' : freqText(it.tmpl, ym)) : ' · one-off'}`)}
+    <div class="dlg-b">
+      <div class="grid2">
+        <label class="field">Amount<input id="if-amount" class="num" type="number" step="0.01" min="0" value="${it.amount}" required inputmode="decimal"></label>
+        <label class="field">${it.type === 'income' ? 'Expected on' : 'Due date'}<input id="if-due" type="date" value="${esc(it.due)}" required></label>
+      </div>
+      ${it.rec ? `<fieldset class="radios"><legend>Apply a new amount or date to</legend>
+        <label class="checkline"><input type="radio" name="if-apply" value="from" checked> ${esc(fmtMonth(ym))} and the months after it</label>
+        <label class="checkline"><input type="radio" name="if-apply" value="once"> Only ${esc(fmtMonth(ym))}</label></fieldset>` : ''}
+      ${it.done ? `<label class="field">${it.type === 'income' ? 'Received' : 'Paid'} on<input id="if-paid" type="date" value="${esc(it.doneDate || it.due)}"></label>` : ''}
+      <label class="field">Note<input id="if-note" type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" autocomplete="off"></label>
+      ${linkBlock}
+      <div class="actions sheet-more">${it.rec ? `<button type="button" class="btn ghost sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit name and schedule</button><button type="button" class="btn ghost sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button type="button" class="btn ghost sm bad" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button type="button" class="btn ghost sm bad" data-act="del-extra" data-key="${k}">Delete this item</button>`}</div>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Save</button></div></form>`);
+}
+function submitItem(f) {
+  const ym = curYm(), key = f.dataset.key, it = findItem(key, ym);
+  if (!it) { closeModal(true); return; }
+  const amount = parseFloat($('#if-amount').value), due = $('#if-due').value;
+  if (isNaN(amount) || amount < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(due)) { toast('Check the amount and the date.'); return; }
+  const a = r2(amount), once = it.rec && f.elements['if-apply'] && f.elements['if-apply'].value === 'once';
+  // what lives on this one occurrence goes first, because moving the date renames its key
+  const patch = { note: $('#if-note').value.trim() };
+  if ($('#if-paid')) patch.date = $('#if-paid').value || null;
+  mutateItem(ym, it, patch);
+  if (a !== it.amount) {
+    if (it.rec && !once) { mutateItem(ym, it, { amount: null }); setFieldFrom(it.tmpl, ym, 'amount', a); touchMeta(); }
+    else mutateItem(ym, it, { amount: it.rec && a === it.planned ? null : a });
+  }
+  const link = $('#if-link');
+  if (link && link.value !== (it.txn || '')) { const t = link.value ? txnById(link.value) : null; if (t) linkItem(ym, it, t); else unlinkItem(ym, it); }
+  let undo = null, msg = 'Saved.';
+  if (due !== it.due) {
+    const r = setDueDate(ym, it, due, once);
+    if (r.moved) msg = `Saved. It moved to ${fmtMonth(r.moved)}.`;
+    else if (r.undo) { undo = r.undo; msg = `Saved. Due on the ${ord(r.day)} from ${fmtMonth(ym)} on.`; }
+  }
+  closeModal(true); render();
+  toast(msg, undo ? { action: 'Undo date', ms: 7000, fn: () => { undo(); render(); } } : {});
+}
+function openAddMenu() {
+  openModal(`${dlgHead('Add to your list')}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="add-tmpl" data-type="bill">A bill</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Rent, utilities, subscriptions. Pick how often it repeats.</p>
+    <button type="button" class="btn" data-act="add-tmpl" data-type="income">Income</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">A paycheck or regular payment you receive.</p>
+    <button type="button" class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">A spending budget</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">A monthly limit, like groceries. You enter what you spend.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
 }
 
 /* ---------- add / remove from the Month tab ---------- */
@@ -1986,7 +2031,7 @@ function finishImports() {
   IM = null;
   if (!IMSTAT.added) { render(); return; }
   const months = Object.entries(IMSTAT.months).sort((a, b) => b[1] - a[1]);
-  UI.tab = 'statements'; UI.sub = 'reconcile'; UI.rm = months[0][0];
+  UI.tab = 'bank'; UI.sub = 'reconcile'; UI.rm = months[0][0];
   render(); scrollTo(0, 0);
   toast(`Added ${plural(IMSTAT.added, 'transaction')} from ${plural(IMSTAT.files, 'file')}.`, { ms: 7000 });
 }
@@ -1999,7 +2044,7 @@ function openSettings() {
   const used = new Set([...D.txns.map(t => t.cat), ...D.templates.map(t => t.category)]);
   openModal(`${dlgHead('Settings and backup')}<div class="dlg-b">
     <div><h3 style="font-size:15px">Where your data lives</h3><p class="muted" style="font-size:14px;margin-top:4px">${where}</p></div>
-    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Obligations and Spending, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
+    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Bills and the spending summary, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
     <label class="field">Currency<select data-chg="currency">${cur.map(c => `<option${D.settings.currency === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label>
     <div><h3 style="font-size:15px">Categories</h3><div class="actions" style="margin-top:8px">${D.cats.map(c => `<span class="pill">${esc(c)}${PROTECTED.has(c) || used.has(c) ? '' : ` <button type="button" class="btn ghost sm" style="min-height:0;padding:0 2px" data-act="cat-del" data-cat="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button>`}</span>`).join('')}</div>
       <div class="actions" style="margin-top:10px"><input class="inp sm" id="newcat" type="text" placeholder="New category" style="width:180px" autocomplete="off"><button type="button" class="btn sm" data-act="cat-add">Add</button></div></div>
@@ -2027,10 +2072,14 @@ async function restoreBackup(file) {
 }
 
 /* ---------- events ---------- */
-const curYm = () => (UI.tab === 'statements' ? reconcileMonth() : UI.ym);
+const curYm = () => (UI.tab === 'bank' ? reconcileMonth() : UI.ym);
 const findItem = (key, ym = curYm()) => itemsFor(ym).find(i => i.key === key);
 const isBlank = () => !D.templates.length && !D.txns.length && !Object.keys(D.months).length;
+/* tab names from earlier versions still work in links and saved settings */
+const LEGACY_TABS = { obligations: 'bills', statements: 'bank', spending: 'bank' };
 function go(tab) {
+  if (tab === 'spending') UI.sub = 'spending';
+  tab = LEGACY_TABS[tab] || tab;
   UI.tab = tab; UI.open = null;
   try { localStorage.setItem('billledger.tab', tab); } catch (e) { /* convenience only */ }
   render(); scrollTo(0, 0);
@@ -2041,25 +2090,27 @@ const ACTIONS = {
   'month-prev': () => { UI.ym = addMonths(UI.ym, -1); UI.open = null; render(); },
   'month-next': () => { UI.ym = addMonths(UI.ym, 1); UI.open = null; render(); },
   'month-today': () => { UI.ym = thisMonth(); UI.open = null; render(); },
-  toggle: el => { const it = findItem(el.dataset.key); if (it) { toggleDone(UI.ym, it); render(); } },
-  open: el => {
-    UI.open = el.dataset.focus ? el.dataset.key : (UI.open === el.dataset.key ? null : el.dataset.key); render();
-    if (el.dataset.focus && UI.open) { const f = $('.detail input[data-chg=amount]'); if (f) { f.focus(); f.select(); } }
+  toggle: el => {
+    const it = findItem(el.dataset.key); if (!it) return;
+    const was = it.done; toggleDone(UI.ym, it); render();
+    if (!was) toast(`${it.name} marked ${it.type === 'income' ? 'received' : 'paid'}.`, { action: 'Undo', ms: 4000, fn: () => { const again = findItem(el.dataset.key); if (again && again.done) { toggleDone(UI.ym, again); render(); } } });
   },
+  open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
+  'edit-item': el => openItemDialog(el.dataset.key),
+  'add-menu': () => openAddMenu(),
   'add-bill': () => openAddBill(),
-  'edit-amount': el => openTemplateDialog(el.dataset.id, {}, { focus: 'amount' }),
   'del-tmpl': el => askDeleteTemplate(el.dataset.id),
   'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
   'tmpl-delete': el => deleteTemplate(el.dataset.id),
   skip: el => {
     const it = findItem(el.dataset.key); if (!it) return;
     mutateItem(UI.ym, it, it.skip ? { skip: false } : { skip: true, done: false, date: null, txn: null });
-    render();
+    closeModal(true); render();
   },
   'del-extra': el => {
     const it = findItem(el.dataset.key); if (!it || !it.extra) return;
     const mo = D.months[UI.ym]; mo.extras = mo.extras.filter(x => x !== it.extra); touchMonth(UI.ym);
-    UI.open = null; render(); toast(`Deleted ${it.name}.`);
+    closeModal(true); UI.open = null; render(); toast(`Deleted ${it.name}.`);
   },
   'edit-tmpl': el => openTemplateDialog(el.dataset.id),
   'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type, budget: el.dataset.budget === '1' }),
@@ -2088,7 +2139,7 @@ const ACTIONS = {
   'more-txns': () => { UI.txLimit += 200; $('#txnList').innerHTML = txnTable(); },
   'del-import': el => {
     const id = el.dataset.id;
-    if (UI.confirm !== id) { UI.confirm = id; render(); setTimeout(() => { if (UI.confirm === id) { UI.confirm = null; if (UI.tab === 'statements') render(); } }, 4000); return; }
+    if (UI.confirm !== id) { UI.confirm = id; render(); setTimeout(() => { if (UI.confirm === id) { UI.confirm = null; if (UI.tab === 'bank') render(); } }, 4000); return; }
     UI.confirm = null;
     const ids = new Set(D.txns.filter(t => t.src === id).map(t => t.id));
     new Set(D.txns.filter(t => ids.has(t.id)).map(t => ymOf(t.date))).forEach(touchTxns);
@@ -2102,7 +2153,7 @@ const ACTIONS = {
   },
   drill: el => {
     const { from, to } = rangeFor(UI.range);
-    UI.tab = 'statements'; UI.sub = 'transactions'; UI.fc = el.dataset.cat; UI.fm = from === to ? from : 'all'; UI.q = ''; UI.fu = false; UI.txLimit = 100;
+    UI.tab = 'bank'; UI.sub = 'transactions'; UI.fc = el.dataset.cat; UI.fm = from === to ? from : 'all'; UI.q = ''; UI.fu = false; UI.txLimit = 100;
     render(); scrollTo(0, 0);
   },
   'add-recurring': el => {
@@ -2128,7 +2179,7 @@ const ACTIONS = {
   'imp-row-flip': el => { const r = IM.rows[+el.dataset.i]; if (r) { r.amt = -r.amt; $('#impPrev').innerHTML = previewTable(); } }
 };
 const RO_OK = new Set(['tab', 'month-prev', 'month-next', 'month-today']);
-const RO_CHANGE = new Set(['hidepaid', 'range']);
+const RO_CHANGE = new Set(['range']);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
@@ -2139,25 +2190,6 @@ document.addEventListener('click', e => {
 });
 
 const CHANGE = {
-  hidepaid: el => { UI.hidePaid = el.checked; render(); },
-  amount: el => {
-    const it = findItem(el.dataset.key), v = parseFloat(el.value);
-    if (!it || isNaN(v) || v < 0) { render(); return; }
-    const a = r2(v);
-    mutateItem(curYm(), it, { amount: it.rec && a === it.planned ? null : a }); render();
-  },
-  duedate: el => {
-    const ym = curYm(), it = findItem(el.dataset.key, ym), nd = el.value;
-    if (!it || !/^\d{4}-\d{2}-\d{2}$/.test(nd) || nd === it.due) { render(); return; }
-    const once = !!($('#due-once') && $('#due-once').checked), r = setDueDate(ym, it, nd, once);
-    if (r.key && UI.open === it.key) UI.open = r.key; // the row's key follows its new date
-    render();
-    if (r.moved) toast(`Moved to ${fmtMonth(r.moved)}.`);
-    else if (r.once) toast(`${it.name} is due ${fmtShort(nd)} this month only.`);
-    else if (r.undo) toast(`${it.name} is now due on the ${ord(r.day)} from ${fmtMonth(ym)} on.`, { action: 'Undo', ms: 8000, fn: () => { r.undo(); render(); } });
-  },
-  paiddate: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { date: el.value || null }); render(); } },
-  note: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { note: el.value.trim() }); render(); } },
   link: el => {
     const it = findItem(el.dataset.key), t = el.value ? txnById(el.value) : null;
     if (!it) return;
@@ -2191,6 +2223,7 @@ document.addEventListener('input', e => {
 document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'tf') submitTemplate();
+  else if (e.target.id === 'itf') submitItem(e.target);
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
   else if (e.target.classList.contains('incf')) submitIncome(e.target);
@@ -2212,7 +2245,7 @@ document.addEventListener('drop', e => {
 });
 
 let resizeT = null;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (UI.tab === 'spending' && $('#modal').hidden) render(); }, 200); });
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (UI.tab === 'bank' && UI.sub === 'spending' && $('#modal').hidden) render(); }, 200); });
 
 /* ---------- start ---------- */
 async function main() {
@@ -2224,8 +2257,8 @@ async function main() {
   $('#saveState').replaceWith(saveChip());
   const hash = location.hash.slice(1);
   let saved = null; try { saved = localStorage.getItem('billledger.tab'); } catch (e) { /* ignore */ }
-  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === t));
-  if (pick) UI.tab = pick;
+  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === (LEGACY_TABS[t] || t)));
+  if (pick) { if (pick === 'spending') UI.sub = 'spending'; UI.tab = LEGACY_TABS[pick] || pick; }
   render();
 }
 main().catch(err => {

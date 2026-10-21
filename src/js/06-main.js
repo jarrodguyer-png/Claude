@@ -1,8 +1,12 @@
 /* ---------- events ---------- */
-const curYm = () => (UI.tab === 'statements' ? reconcileMonth() : UI.ym);
+const curYm = () => (UI.tab === 'bank' ? reconcileMonth() : UI.ym);
 const findItem = (key, ym = curYm()) => itemsFor(ym).find(i => i.key === key);
 const isBlank = () => !D.templates.length && !D.txns.length && !Object.keys(D.months).length;
+/* tab names from earlier versions still work in links and saved settings */
+const LEGACY_TABS = { obligations: 'bills', statements: 'bank', spending: 'bank' };
 function go(tab) {
+  if (tab === 'spending') UI.sub = 'spending';
+  tab = LEGACY_TABS[tab] || tab;
   UI.tab = tab; UI.open = null;
   try { localStorage.setItem('billledger.tab', tab); } catch (e) { /* convenience only */ }
   render(); scrollTo(0, 0);
@@ -13,25 +17,27 @@ const ACTIONS = {
   'month-prev': () => { UI.ym = addMonths(UI.ym, -1); UI.open = null; render(); },
   'month-next': () => { UI.ym = addMonths(UI.ym, 1); UI.open = null; render(); },
   'month-today': () => { UI.ym = thisMonth(); UI.open = null; render(); },
-  toggle: el => { const it = findItem(el.dataset.key); if (it) { toggleDone(UI.ym, it); render(); } },
-  open: el => {
-    UI.open = el.dataset.focus ? el.dataset.key : (UI.open === el.dataset.key ? null : el.dataset.key); render();
-    if (el.dataset.focus && UI.open) { const f = $('.detail input[data-chg=amount]'); if (f) { f.focus(); f.select(); } }
+  toggle: el => {
+    const it = findItem(el.dataset.key); if (!it) return;
+    const was = it.done; toggleDone(UI.ym, it); render();
+    if (!was) toast(`${it.name} marked ${it.type === 'income' ? 'received' : 'paid'}.`, { action: 'Undo', ms: 4000, fn: () => { const again = findItem(el.dataset.key); if (again && again.done) { toggleDone(UI.ym, again); render(); } } });
   },
+  open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
+  'edit-item': el => openItemDialog(el.dataset.key),
+  'add-menu': () => openAddMenu(),
   'add-bill': () => openAddBill(),
-  'edit-amount': el => openTemplateDialog(el.dataset.id, {}, { focus: 'amount' }),
   'del-tmpl': el => askDeleteTemplate(el.dataset.id),
   'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
   'tmpl-delete': el => deleteTemplate(el.dataset.id),
   skip: el => {
     const it = findItem(el.dataset.key); if (!it) return;
     mutateItem(UI.ym, it, it.skip ? { skip: false } : { skip: true, done: false, date: null, txn: null });
-    render();
+    closeModal(true); render();
   },
   'del-extra': el => {
     const it = findItem(el.dataset.key); if (!it || !it.extra) return;
     const mo = D.months[UI.ym]; mo.extras = mo.extras.filter(x => x !== it.extra); touchMonth(UI.ym);
-    UI.open = null; render(); toast(`Deleted ${it.name}.`);
+    closeModal(true); UI.open = null; render(); toast(`Deleted ${it.name}.`);
   },
   'edit-tmpl': el => openTemplateDialog(el.dataset.id),
   'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type, budget: el.dataset.budget === '1' }),
@@ -60,7 +66,7 @@ const ACTIONS = {
   'more-txns': () => { UI.txLimit += 200; $('#txnList').innerHTML = txnTable(); },
   'del-import': el => {
     const id = el.dataset.id;
-    if (UI.confirm !== id) { UI.confirm = id; render(); setTimeout(() => { if (UI.confirm === id) { UI.confirm = null; if (UI.tab === 'statements') render(); } }, 4000); return; }
+    if (UI.confirm !== id) { UI.confirm = id; render(); setTimeout(() => { if (UI.confirm === id) { UI.confirm = null; if (UI.tab === 'bank') render(); } }, 4000); return; }
     UI.confirm = null;
     const ids = new Set(D.txns.filter(t => t.src === id).map(t => t.id));
     new Set(D.txns.filter(t => ids.has(t.id)).map(t => ymOf(t.date))).forEach(touchTxns);
@@ -74,7 +80,7 @@ const ACTIONS = {
   },
   drill: el => {
     const { from, to } = rangeFor(UI.range);
-    UI.tab = 'statements'; UI.sub = 'transactions'; UI.fc = el.dataset.cat; UI.fm = from === to ? from : 'all'; UI.q = ''; UI.fu = false; UI.txLimit = 100;
+    UI.tab = 'bank'; UI.sub = 'transactions'; UI.fc = el.dataset.cat; UI.fm = from === to ? from : 'all'; UI.q = ''; UI.fu = false; UI.txLimit = 100;
     render(); scrollTo(0, 0);
   },
   'add-recurring': el => {
@@ -100,7 +106,7 @@ const ACTIONS = {
   'imp-row-flip': el => { const r = IM.rows[+el.dataset.i]; if (r) { r.amt = -r.amt; $('#impPrev').innerHTML = previewTable(); } }
 };
 const RO_OK = new Set(['tab', 'month-prev', 'month-next', 'month-today']);
-const RO_CHANGE = new Set(['hidepaid', 'range']);
+const RO_CHANGE = new Set(['range']);
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
@@ -111,25 +117,6 @@ document.addEventListener('click', e => {
 });
 
 const CHANGE = {
-  hidepaid: el => { UI.hidePaid = el.checked; render(); },
-  amount: el => {
-    const it = findItem(el.dataset.key), v = parseFloat(el.value);
-    if (!it || isNaN(v) || v < 0) { render(); return; }
-    const a = r2(v);
-    mutateItem(curYm(), it, { amount: it.rec && a === it.planned ? null : a }); render();
-  },
-  duedate: el => {
-    const ym = curYm(), it = findItem(el.dataset.key, ym), nd = el.value;
-    if (!it || !/^\d{4}-\d{2}-\d{2}$/.test(nd) || nd === it.due) { render(); return; }
-    const once = !!($('#due-once') && $('#due-once').checked), r = setDueDate(ym, it, nd, once);
-    if (r.key && UI.open === it.key) UI.open = r.key; // the row's key follows its new date
-    render();
-    if (r.moved) toast(`Moved to ${fmtMonth(r.moved)}.`);
-    else if (r.once) toast(`${it.name} is due ${fmtShort(nd)} this month only.`);
-    else if (r.undo) toast(`${it.name} is now due on the ${ord(r.day)} from ${fmtMonth(ym)} on.`, { action: 'Undo', ms: 8000, fn: () => { r.undo(); render(); } });
-  },
-  paiddate: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { date: el.value || null }); render(); } },
-  note: el => { const it = findItem(el.dataset.key); if (it) { mutateItem(curYm(), it, { note: el.value.trim() }); render(); } },
   link: el => {
     const it = findItem(el.dataset.key), t = el.value ? txnById(el.value) : null;
     if (!it) return;
@@ -163,6 +150,7 @@ document.addEventListener('input', e => {
 document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'tf') submitTemplate();
+  else if (e.target.id === 'itf') submitItem(e.target);
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
   else if (e.target.classList.contains('incf')) submitIncome(e.target);
@@ -184,7 +172,7 @@ document.addEventListener('drop', e => {
 });
 
 let resizeT = null;
-addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (UI.tab === 'spending' && $('#modal').hidden) render(); }, 200); });
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (UI.tab === 'bank' && UI.sub === 'spending' && $('#modal').hidden) render(); }, 200); });
 
 /* ---------- start ---------- */
 async function main() {
@@ -196,8 +184,8 @@ async function main() {
   $('#saveState').replaceWith(saveChip());
   const hash = location.hash.slice(1);
   let saved = null; try { saved = localStorage.getItem('billledger.tab'); } catch (e) { /* ignore */ }
-  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === t));
-  if (pick) UI.tab = pick;
+  const pick = [hash, saved].find(t => visibleTabs().some(x => x[0] === (LEGACY_TABS[t] || t)));
+  if (pick) { if (pick === 'spending') UI.sub = 'spending'; UI.tab = LEGACY_TABS[pick] || pick; }
   render();
 }
 main().catch(err => {

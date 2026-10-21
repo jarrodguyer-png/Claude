@@ -71,25 +71,26 @@ let TF = null;
 function openTemplateDialog(id, preset = {}, opts = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
-  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
+  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
   TF.ctx = preset.ctx || (UI.tab === 'month' ? UI.ym : thisMonth());
   if (t) { TF.amount = amountFor(t, TF.ctx); TF.day = fieldFor(t, TF.ctx, 'day'); TF.day2 = fieldFor(t, TF.ctx, 'day2'); TF.anchor = fieldFor(t, TF.ctx, 'anchor') || TF.anchor; }
   const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
-  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
+  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : '')}
     <div class="dlg-b">
       <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
         <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
-      ${t ? `<label class="field">Apply a new amount or due day to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select><small>Only matters if you change the amount or the due day.</small></label>` : ''}
-      <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
-        ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
-      ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
-      <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months you want to reconcile.</small></label>
-        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when it stops. Older months keep their history.</small></label></div>
-      ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
-      ${type === 'bill' && !budget ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
+      ${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
+      <details class="more"><summary>More options</summary><div class="more-b">
+        ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select><small>Used for the spending breakdown. Left as Other, it is guessed from the name.</small></label>` : ''}
+        <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months.</small></label>
+          <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set when it stops. Older months keep their history.</small></label></div>
+        ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
+        ${t ? `<label class="field">A new amount or due day applies to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select></label>` : ''}
+      </div></details>
     </div>
-    <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
+    <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Remove…</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save' : 'Add ' + word}</button></div></form>`);
   if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
   if (t) $('#tf-del').onclick = () => askDeleteTemplate(t.id);
   if (opts.focus) { const f = $('#tf-' + opts.focus); if (f) { f.focus(); if (f.select) f.select(); } }
@@ -106,7 +107,6 @@ function readTmplForm(soft) {
   if (g('tf-start') !== undefined) TF.start = g('tf-start');
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
-  if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
   if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
@@ -117,9 +117,8 @@ function submitTemplate() {
   if (!TF.name || isNaN(amount) || amount < 0) { toast('Add a name and an amount.'); return; }
   if ((TF.freq === 'weekly' || TF.freq === 'biweekly') && !TF.anchor) { toast('Pick a date it lands on.'); return; }
   const ok = /^\d{4}-\d{2}$/;
-  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
+  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category && TF.category !== 'Other' ? TF.category : (TF.editing ? 'Other' : guessCategory(TF.name))), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
-  if (!obj.autopay) delete obj.autopay;
   if (TF.budget) obj.budget = true;
   let t;
   if (TF.editing) {
@@ -146,6 +145,70 @@ function submitTemplate() {
   if (link) { const it = itemsFor(ymOf(link.date)).find(i => i.tmpl && i.tmpl.id === t.id); if (it) linkItem(ymOf(link.date), it, link); }
   render();
   toast(TF.editing ? 'Saved.' : `Added ${t.name}.`);
+}
+
+const guessCategory = name => { const c = autoCategory(name, -1); return NON_SPEND.has(c) ? 'Other' : c; };
+
+/* ---------- one sheet to change a bill or income row ---------- */
+function openItemDialog(key) {
+  const ym = curYm(), it = findItem(key, ym); if (!it) return;
+  const k = esc(key), verb = it.type === 'income' ? 'received' : 'paid', link = it.txn ? txnById(it.txn) : null;
+  let linkBlock = '';
+  if (D.txns.length) {
+    const cands = candidatePool(ym).map(t => ({ t, s: scoreMatch(it, t).s })).filter(x => x.s >= 0).sort((a, b) => b.s - a.s).slice(0, 25).map(x => x.t);
+    if (link && !cands.includes(link)) cands.unshift(link);
+    linkBlock = `<label class="field">Statement line<select id="if-link"><option value="">${link ? 'Unlink' : 'Not linked'}</option>${cands.map(t => `<option value="${t.id}"${link && link.id === t.id ? ' selected' : ''}>${fmtShort(t.date)} · ${esc(t.desc.slice(0, 40))} · ${money(Math.abs(t.amt))}</option>`).join('')}</select><small>Linking marks it ${verb} with the real date and amount.</small></label>`;
+  }
+  openModal(`<form id="itf" data-key="${k}">${dlgHead(esc(it.name), `${esc(fmtMonth(ym))}${it.rec ? ' · ' + esc(it.budget ? 'budget' : freqText(it.tmpl, ym)) : ' · one-off'}`)}
+    <div class="dlg-b">
+      <div class="grid2">
+        <label class="field">Amount<input id="if-amount" class="num" type="number" step="0.01" min="0" value="${it.amount}" required inputmode="decimal"></label>
+        <label class="field">${it.type === 'income' ? 'Expected on' : 'Due date'}<input id="if-due" type="date" value="${esc(it.due)}" required></label>
+      </div>
+      ${it.rec ? `<fieldset class="radios"><legend>Apply a new amount or date to</legend>
+        <label class="checkline"><input type="radio" name="if-apply" value="from" checked> ${esc(fmtMonth(ym))} and the months after it</label>
+        <label class="checkline"><input type="radio" name="if-apply" value="once"> Only ${esc(fmtMonth(ym))}</label></fieldset>` : ''}
+      ${it.done ? `<label class="field">${it.type === 'income' ? 'Received' : 'Paid'} on<input id="if-paid" type="date" value="${esc(it.doneDate || it.due)}"></label>` : ''}
+      <label class="field">Note<input id="if-note" type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" autocomplete="off"></label>
+      ${linkBlock}
+      <div class="actions sheet-more">${it.rec ? `<button type="button" class="btn ghost sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit name and schedule</button><button type="button" class="btn ghost sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button type="button" class="btn ghost sm bad" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button type="button" class="btn ghost sm bad" data-act="del-extra" data-key="${k}">Delete this item</button>`}</div>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Save</button></div></form>`);
+}
+function submitItem(f) {
+  const ym = curYm(), key = f.dataset.key, it = findItem(key, ym);
+  if (!it) { closeModal(true); return; }
+  const amount = parseFloat($('#if-amount').value), due = $('#if-due').value;
+  if (isNaN(amount) || amount < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(due)) { toast('Check the amount and the date.'); return; }
+  const a = r2(amount), once = it.rec && f.elements['if-apply'] && f.elements['if-apply'].value === 'once';
+  // what lives on this one occurrence goes first, because moving the date renames its key
+  const patch = { note: $('#if-note').value.trim() };
+  if ($('#if-paid')) patch.date = $('#if-paid').value || null;
+  mutateItem(ym, it, patch);
+  if (a !== it.amount) {
+    if (it.rec && !once) { mutateItem(ym, it, { amount: null }); setFieldFrom(it.tmpl, ym, 'amount', a); touchMeta(); }
+    else mutateItem(ym, it, { amount: it.rec && a === it.planned ? null : a });
+  }
+  const link = $('#if-link');
+  if (link && link.value !== (it.txn || '')) { const t = link.value ? txnById(link.value) : null; if (t) linkItem(ym, it, t); else unlinkItem(ym, it); }
+  let undo = null, msg = 'Saved.';
+  if (due !== it.due) {
+    const r = setDueDate(ym, it, due, once);
+    if (r.moved) msg = `Saved. It moved to ${fmtMonth(r.moved)}.`;
+    else if (r.undo) { undo = r.undo; msg = `Saved. Due on the ${ord(r.day)} from ${fmtMonth(ym)} on.`; }
+  }
+  closeModal(true); render();
+  toast(msg, undo ? { action: 'Undo date', ms: 7000, fn: () => { undo(); render(); } } : {});
+}
+function openAddMenu() {
+  openModal(`${dlgHead('Add to your list')}<div class="dlg-b">
+    <button type="button" class="btn primary" data-act="add-tmpl" data-type="bill">A bill</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Rent, utilities, subscriptions. Pick how often it repeats.</p>
+    <button type="button" class="btn" data-act="add-tmpl" data-type="income">Income</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">A paycheck or regular payment you receive.</p>
+    <button type="button" class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">A spending budget</button>
+    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">A monthly limit, like groceries. You enter what you spend.</p>
+  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
 }
 
 /* ---------- add / remove from the Month tab ---------- */
@@ -356,7 +419,7 @@ function finishImports() {
   IM = null;
   if (!IMSTAT.added) { render(); return; }
   const months = Object.entries(IMSTAT.months).sort((a, b) => b[1] - a[1]);
-  UI.tab = 'statements'; UI.sub = 'reconcile'; UI.rm = months[0][0];
+  UI.tab = 'bank'; UI.sub = 'reconcile'; UI.rm = months[0][0];
   render(); scrollTo(0, 0);
   toast(`Added ${plural(IMSTAT.added, 'transaction')} from ${plural(IMSTAT.files, 'file')}.`, { ms: 7000 });
 }
@@ -369,7 +432,7 @@ function openSettings() {
   const used = new Set([...D.txns.map(t => t.cat), ...D.templates.map(t => t.category)]);
   openModal(`${dlgHead('Settings and backup')}<div class="dlg-b">
     <div><h3 style="font-size:15px">Where your data lives</h3><p class="muted" style="font-size:14px;margin-top:4px">${where}</p></div>
-    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Obligations and Spending, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
+    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Bills and the spending summary, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
     <label class="field">Currency<select data-chg="currency">${cur.map(c => `<option${D.settings.currency === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label>
     <div><h3 style="font-size:15px">Categories</h3><div class="actions" style="margin-top:8px">${D.cats.map(c => `<span class="pill">${esc(c)}${PROTECTED.has(c) || used.has(c) ? '' : ` <button type="button" class="btn ghost sm" style="min-height:0;padding:0 2px" data-act="cat-del" data-cat="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button>`}</span>`).join('')}</div>
       <div class="actions" style="margin-top:10px"><input class="inp sm" id="newcat" type="text" placeholder="New category" style="width:180px" autocomplete="off"><button type="button" class="btn sm" data-act="cat-add">Add</button></div></div>
