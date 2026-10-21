@@ -58,13 +58,12 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
                  plan: {amount, source?} }                         (the paycheck typed into the Planner tab)
-   a template with budget:true is a variable expense (a monthly amount you spend against); goal:true marks money put aside, where
-   reaching the amount is good and never turns red; an amount of 0 means no limit set
+   a template with budget:true is a variable expense (a monthly amount you spend against); an amount of 0 means no limit set
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
-   growth    : [{id,kind:'savings'|'investing',date,amount,note}] deposits (+) and withdrawals (-) behind the Growth tab; the monthly
-               amounts logged on goal lines (savings / investing) under Variable expenses count toward the same totals
+   growth    : [{id,kind:'savings'|'investing',date,amount,note,adj?}] deposits (+), withdrawals (-) and set-to-a-new-total adjustments (adj)
+               behind the Growth tab, the only place savings and investments are recorded
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
 const DEFAULT_CATS = ['Housing', 'Utilities', 'Groceries', 'Dining', 'Fuel', 'Transport', 'Insurance', 'Health', 'Subscriptions', 'Shopping',
@@ -131,6 +130,27 @@ function dataFromDocs(docs) {
   d.txns.sort((a, b) => a.date.localeCompare(b.date));
   for (const c of ['Income', 'Transfer', 'Other']) if (!d.cats.includes(c)) d.cats.push(c);
   return d;
+}
+
+/* Savings and investments used to be "goal" lines under Variable expenses. They now live only on the Growth tab,
+   so any entries on such a line become Growth deposits and the line is dropped. Returns the months it changed. */
+function migrateGoalLines(d) {
+  const goals = d.templates.filter(t => t.goal);
+  if (!goals.length) return null;
+  const touched = new Set();
+  for (const t of goals) {
+    const kind = t.category === 'Investing' ? 'investing' : 'savings';
+    for (const [ym, mo] of Object.entries(d.months)) {
+      const mine = (mo.spends || []).filter(s => s.t === t.id), keys = Object.keys(mo.entries).filter(k => k.startsWith(t.id + '@'));
+      if (!mine.length && !keys.length) continue;
+      mine.forEach(s => d.growth.push({ id: uid('g'), kind, date: s.date, amount: s.amount, ...(s.note ? { note: s.note } : {}) }));
+      mo.spends = (mo.spends || []).filter(s => s.t !== t.id);
+      keys.forEach(k => { delete mo.entries[k]; });
+      touched.add(ym);
+    }
+  }
+  d.templates = d.templates.filter(t => !t.goal);
+  return touched;
 }
 
 /* ---------- storage: private Claude storage when published, otherwise this browser ---------- */
@@ -200,9 +220,11 @@ const Store = {
     if (!docs) docs = await backend.list();
     this.known = new Set(Object.keys(docs));
     D = dataFromDocs(docs);
+    const moved = migrateGoalLines(D);
+    if (moved && !this.readonly) { touchMeta(); touchGrowth(); moved.forEach(touchMonth); }
     if (backend.mode === 'cloud-view') {
       let first = true;
-      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); if (typeof render === 'function') render(); });
+      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); migrateGoalLines(D); if (typeof render === 'function') render(); });
     }
   },
   get mode() { return this.backend ? this.backend.mode : 'memory'; },

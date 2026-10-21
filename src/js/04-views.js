@@ -49,7 +49,7 @@ function viewMonth() {
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
   const late = S.bills.filter(i => itemStatus(i) === 'late').length;
-  const over = S.budgets.filter(i => i.amount > 0 && !i.tmpl.goal && i.spent > i.amount + 0.005);
+  const over = S.budgets.filter(i => i.amount > 0 && i.spent > i.amount + 0.005);
   const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
     <div class="stats">
@@ -89,19 +89,17 @@ function viewMonth() {
     <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="income">+ Repeating income</button>'}</div>
     ${incForm}
     ${inc.length ? `<ul class="list">${group(inc, false)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
-    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
   </section>`;
   // bills first, then income, with the spending budgets in their own section at the bottom
   return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}`;
 }
 /* a variable expense: a monthly amount, a running total of what was spent, and red when it goes over.
-   No limit set just tracks; a goal (savings, investing) shows green when reached and never red. */
+   An amount of 0 means no limit set, so it just tracks. */
 function budgetHTML(b, ym) {
-  const ro = RO(), tid = b.tmpl.id, goal = !!b.tmpl.goal, nolimit = !(b.amount > 0), k = esc(b.key);
-  const over = !goal && !nolimit && b.spent > b.amount + 0.005, reached = goal && !nolimit && b.spent >= b.amount - 0.005;
-  const pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
-  const state = nolimit ? 'none' : over ? 'over' : reached ? 'done' : (!goal && pct >= 85) ? 'near' : 'ok';
-  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : reached ? '<span class="pill good">Goal reached</span>' : goal ? `<span class="pill">${money(left)} to go</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
+  const ro = RO(), tid = b.tmpl.id, nolimit = !(b.amount > 0), k = esc(b.key);
+  const over = !nolimit && b.spent > b.amount + 0.005, pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
+  const state = nolimit ? 'none' : over ? 'over' : pct >= 85 ? 'near' : 'ok';
+  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
   const expanded = ro || UI.open === b.key;
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
@@ -110,7 +108,7 @@ function budgetHTML(b, ym) {
     <${tag} class="bhead"${ro ? '' : ` data-act="pick-exp" data-id="${tid}" title="Add spending to ${esc(b.name)}"`}><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">${nolimit ? 'spent' : `of ${money(b.amount)}`}</span></span></${tag}>
     <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
     <div class="bsub">${pill}
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}${goal && (b.tmpl.category === 'Savings' || b.tmpl.category === 'Investing') && !ro ? '<span class="muted" style="font-size:12.5px">counts toward Growth</span>' : ''}</div>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}</div>
     ${expanded ? `<div class="bentries">${list}</div>` : ''}
   </li>`;
 }
@@ -162,9 +160,9 @@ function viewPlanner() {
 }
 
 /* ----- Growth: overall savings and investment totals ----- */
-function growthCard(kind, label, cat) {
-  const g = growthFor(kind, cat), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
-  return `<section class="card"><div class="card-h"><div><h2>${label}</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Total ${money(g.total)}</p></div></div>
+function growthCard(kind, label) {
+  const g = growthFor(kind), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
+  return `<section class="card"><div class="card-h"><h2>${label}</h2></div>
     <form class="growf" data-kind="${kind}" autocomplete="off">
       <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
       <input name="note" class="inp" type="text" placeholder="Note (optional)" aria-label="Note">
@@ -172,11 +170,10 @@ function growthCard(kind, label, cat) {
       <button class="btn primary sm" type="submit" value="add">Add</button><button class="btn sm" type="submit" value="out">Take out</button></form>
     <details class="more" style="margin:0 18px 14px"><summary>Set to a new total</summary><form class="growset" data-kind="${kind}" autocomplete="off" style="padding:0 0 12px">
       <input name="total" class="inp num" type="number" step="0.01" inputmode="decimal" placeholder="${money(g.total)}" aria-label="New total" required><button class="btn sm" type="submit">Update total</button>
-      <small class="muted" style="flex:1 1 100%">Records the difference as an entry, so the list below still adds up. Handy for investments that go up and down.</small></form></details>
-    ${g.monthly ? `<p class="muted" style="padding:0 18px 8px;font-size:13.5px">${money(g.manual)} entered here · ${money(g.monthly)} from your monthly ${label.toLowerCase()} line</p>` : ''}
-    ${rows.length ? `<ul class="entries gentries">${rows.map(e => `<li><span class="num muted">${fmtShort(e.date)}</span><span class="enote">${esc(e.note || '')}</span><span class="num${e.amount < 0 ? ' out-n' : ''}">${money(e.amount, { sign: true })}</span>${e.manual ? `<button class="btn ghost sm" data-act="del-growth" data-id="${e.id}" aria-label="Remove this entry" title="Remove">&times;</button>` : '<span></span>'}</li>`).join('')}</ul>
+      <small class="muted" style="flex:1 1 100%">Use this for a starting balance, or for investments that go up and down. The difference is recorded as an entry, so the list below still adds up.</small></form></details>
+    ${rows.length ? `<ul class="entries gentries">${rows.map(e => `<li><span class="num muted">${fmtShort(e.date)}</span><span class="enote">${esc(e.note || '')}</span><span class="num${e.amount < 0 ? ' out-n' : ''}">${money(e.amount, { sign: true })}</span><button class="btn ghost sm" data-act="del-growth" data-id="${e.id}" aria-label="Remove this entry" title="Remove">&times;</button></li>`).join('')}</ul>
       ${g.rows.length > 6 ? `<div class="card-f"><span class="muted">${all ? 'All' : 'Latest 6 of'} ${plural(g.rows.length, 'entry', 'entries')}</span><button class="btn ghost sm" data-act="growth-more" data-kind="${kind}">${all ? 'Show fewer' : 'Show all'}</button></div>` : ''}`
-      : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Add what you have now as a starting balance.</p>'}
+      : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Use "Set to a new total" to enter what you have now.</p>'}
   </section>`;
 }
 function goalCard() {
@@ -193,13 +190,13 @@ function goalCard() {
       <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
 }
 function viewGrowth() {
-  const gs = GROWTH.map(([k, l, c]) => ({ k, l, c, g: growthFor(k, c) })), total = sum(gs, x => x.g.total);
-  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals. Money you log on the Savings and Investment lines under Variable expenses is counted here automatically.</p></div></div>
+  const gs = GROWTH.map(([k, l]) => ({ k, l, g: growthFor(k) })), total = sum(gs, x => x.g.total);
+  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals.</p></div></div>
     <section class="card"><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
     <div style="margin-top:16px">${goalCard()}</div>
-    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l, x.c)}</div>`).join('')}</div>`;
+    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l)}</div>`).join('')}</div>`;
 }
 
 /* ----- one repeating item, as listed in Settings ----- */
@@ -208,13 +205,13 @@ function tmplRow(t) {
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}</span>
-    <span class="rmeta"><span>${t.budget ? (t.goal ? 'Monthly, put aside' : 'Monthly variable expense') : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span class="rmeta"><span>${t.budget ? 'Monthly variable expense' : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(amountFor(t, thisMonth()))}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
 
 /* ----- Bank (statements and spending in one place) ----- */
-const BANK_SUBS = [['reconcile', 'Match bills'], ['spending', 'Spending'], ['transactions', 'Transactions'], ['files', 'Files']];
+const BANK_SUBS = [['reconcile', 'Match bills'], ['spending', 'Spending'], ['transactions', 'Transactions']];
 function viewBank() {
   if (RO()) return viewSpending();
   if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Reconcile</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
@@ -222,7 +219,7 @@ function viewBank() {
       <p>Drop a CSV, OFX/QFX or PDF file here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
       <div class="actions" style="justify-content:center"><button class="btn primary" data-act="choose-files">Choose files</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div></div>`;
   const bar = `<div class="bankbar"><div class="seg" role="group" aria-label="Bank views">${BANK_SUBS.map(([id, l]) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${l}</button>`).join('')}</div><button class="btn primary sm" data-act="choose-files">+ Add statement</button></div>`;
-  const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? viewTxns() : UI.sub === 'files' ? viewFiles() : viewSpending();
+  const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? `<div class="stack">${viewTxns()}${viewFiles()}</div>` : viewSpending();
   return sampleBanner() + bar + body;
 }
 function reconcileMonth() {

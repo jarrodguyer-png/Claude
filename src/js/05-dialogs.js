@@ -87,7 +87,6 @@ function openTemplateDialog(id, preset = {}, opts = {}) {
         <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months.</small></label>
           <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set when it stops. Older months keep their history.</small></label></div>
         ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
-        ${budget ? `<label class="checkline"><input id="tf-goal" type="checkbox"${TF.goal ? ' checked' : ''}><span>This is money I put aside (savings or investing). Reaching the amount is good, so it never turns red.</span></label>` : ''}
         ${t ? `<label class="field">A new amount or due day applies to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select></label>` : ''}
       </div></details>
     </div>
@@ -109,7 +108,6 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
-  if ($('#tf-goal')) TF.goal = $('#tf-goal').checked;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
@@ -121,7 +119,7 @@ function submitTemplate() {
   const ok = /^\d{4}-\d{2}$/;
   const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category && TF.category !== 'Other' ? TF.category : (TF.editing ? 'Other' : guessCategory(TF.name))), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
-  if (TF.budget) { obj.budget = true; if (TF.goal) obj.goal = true; }
+  if (TF.budget) obj.budget = true;
   let t;
   if (TF.editing) {
     t = D.templates.find(x => x.id === TF.id);
@@ -134,7 +132,7 @@ function submitTemplate() {
     const relevant = ['amount', ...(obj.freq === 'twice' ? ['day', 'day2'] : obj.freq === 'weekly' || obj.freq === 'biweekly' ? ['anchor'] : ['day'])];
     const setBase = (f, v) => { if (v === undefined) delete t[f]; else t[f] = v; clearField(t, f); };
     reschedule(t, everywhere ? '' : TF.ctx, () => {
-      for (const k of ['start', 'end', 'match', 'autopay', 'budget', 'goal']) delete t[k];
+      for (const k of ['start', 'end', 'match', 'autopay', 'budget']) delete t[k];
       Object.assign(t, rest);
       if (freqChanged) { fields.forEach(f => setBase(f, next[f])); delete t.changes; }
       else relevant.forEach(f => { if (next[f] !== prev[f]) { if (TF.apply === 'all') setBase(f, next[f]); else setFieldFrom(t, TF.ctx, f, next[f]); } });
@@ -154,13 +152,7 @@ const guessCategory = name => { const c = autoCategory(name, -1); return NON_SPE
 /* ---------- one sheet to change a bill or income row ---------- */
 function openItemDialog(key) {
   const ym = curYm(), it = findItem(key, ym); if (!it) return;
-  const k = esc(key), verb = it.type === 'income' ? 'received' : 'paid', link = it.txn ? txnById(it.txn) : null;
-  let linkBlock = '';
-  if (D.txns.length) {
-    const cands = candidatePool(ym).map(t => ({ t, s: scoreMatch(it, t).s })).filter(x => x.s >= 0).sort((a, b) => b.s - a.s).slice(0, 25).map(x => x.t);
-    if (link && !cands.includes(link)) cands.unshift(link);
-    linkBlock = `<label class="field">Statement line<select id="if-link"><option value="">${link ? 'Unlink' : 'Not linked'}</option>${cands.map(t => `<option value="${t.id}"${link && link.id === t.id ? ' selected' : ''}>${fmtShort(t.date)} · ${esc(t.desc.slice(0, 40))} · ${money(Math.abs(t.amt))}</option>`).join('')}</select><small>Linking marks it ${verb} with the real date and amount.</small></label>`;
-  }
+  const k = esc(key);
   openModal(`<form id="itf" data-key="${k}">${dlgHead(esc(it.name), `${esc(fmtMonth(ym))}${it.rec ? ' · ' + esc(it.budget ? 'variable expense' : freqText(it.tmpl, ym)) : ' · one-off'}`)}
     <div class="dlg-b">
       <div class="grid2">
@@ -172,7 +164,6 @@ function openItemDialog(key) {
         <label class="checkline"><input type="radio" name="if-apply" value="once"> Only ${esc(fmtMonth(ym))}</label></fieldset>` : ''}
       ${it.done ? `<label class="field">${it.type === 'income' ? 'Received' : 'Paid'} on<input id="if-paid" type="date" value="${esc(it.doneDate || it.due)}"></label>` : ''}
       <label class="field">Note<input id="if-note" type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" autocomplete="off"></label>
-      ${linkBlock}
       <div class="actions sheet-more">${it.rec ? `<button type="button" class="btn ghost sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit name and schedule</button><button type="button" class="btn ghost sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button type="button" class="btn ghost sm bad" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button type="button" class="btn ghost sm bad" data-act="del-extra" data-key="${k}">Delete this item</button>`}</div>
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Save</button></div></form>`);
@@ -191,8 +182,6 @@ function submitItem(f) {
     if (it.rec && !once) { mutateItem(ym, it, { amount: null }); setFieldFrom(it.tmpl, ym, 'amount', a); touchMeta(); }
     else mutateItem(ym, it, { amount: it.rec && a === it.planned ? null : a });
   }
-  const link = $('#if-link');
-  if (link && link.value !== (it.txn || '')) { const t = link.value ? txnById(link.value) : null; if (t) linkItem(ym, it, t); else unlinkItem(ym, it); }
   let undo = null, msg = 'Saved.';
   if (due !== it.due) {
     const r = setDueDate(ym, it, due, once);
@@ -453,6 +442,6 @@ async function restoreBackup(file) {
   askConfirm({ title: 'Replace everything with this backup?', text: `Backup from ${esc(obj.exported ? new Date(obj.exported).toLocaleString() : 'unknown date')}: ${plural(obj.data.templates.length, 'recurring item')}, ${plural((obj.data.txns || []).length, 'transaction')}. What you have now will be overwritten.`, ok: 'Replace', danger: true }, async () => {
     const d = Object.assign(emptyData(), obj.data);
     d.settings = Object.assign({ currency: 'USD' }, d.settings);
-    D = d; await Store.replaceAll(); render(); toast('Backup restored.');
+    D = d; migrateGoalLines(D); await Store.replaceAll(); render(); toast('Backup restored.');
   }, () => openSettings());
 }

@@ -61,7 +61,7 @@ const ACTIONS = {
   'load-sample': () => { if (!isBlank()) return; loadSample(); render(); toast('Example data loaded. Clear it any time from the banner.'); },
   'clear-sample': () => askConfirm({ title: 'Clear the example data?', text: 'This removes the example bills, income, statement lines and check-offs. Anything you added yourself while the examples were showing is removed too.', ok: 'Clear example data', danger: true },
     async () => { D = emptyData(); await Store.replaceAll(); UI.open = null; render(); toast('Cleared. You are starting fresh.'); }),
-  sub: el => { UI.sub = el.dataset.sub; render(); },
+  sub: el => { UI.sub = el.dataset.sub === 'files' ? 'transactions' : el.dataset.sub; render(); },
   'choose-files': () => $('#file').click(),
   'apply-sugg': () => {
     const ym = reconcileMonth(); let n = 0;
@@ -180,7 +180,7 @@ document.addEventListener('submit', e => {
   else if (e.target.classList.contains('growset')) {
     const kind = e.target.dataset.kind, row = GROWTH.find(x => x[0] === kind), t = parseFloat(e.target.elements.total.value);
     if (isNaN(t)) { toast('Enter the new total.'); return; }
-    const diff = r2(t - growthFor(kind, row[2]).total);
+    const diff = r2(t - growthFor(kind).total);
     if (!diff) { toast('That is already the total.'); return; }
     addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`, true);
     render(); toast(`${row[1]} is now ${money(t)}.`);

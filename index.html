@@ -435,13 +435,12 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
                  plan: {amount, source?} }                         (the paycheck typed into the Planner tab)
-   a template with budget:true is a variable expense (a monthly amount you spend against); goal:true marks money put aside, where
-   reaching the amount is good and never turns red; an amount of 0 means no limit set
+   a template with budget:true is a variable expense (a monthly amount you spend against); an amount of 0 means no limit set
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
-   growth    : [{id,kind:'savings'|'investing',date,amount,note}] deposits (+) and withdrawals (-) behind the Growth tab; the monthly
-               amounts logged on goal lines (savings / investing) under Variable expenses count toward the same totals
+   growth    : [{id,kind:'savings'|'investing',date,amount,note,adj?}] deposits (+), withdrawals (-) and set-to-a-new-total adjustments (adj)
+               behind the Growth tab, the only place savings and investments are recorded
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
 const DEFAULT_CATS = ['Housing', 'Utilities', 'Groceries', 'Dining', 'Fuel', 'Transport', 'Insurance', 'Health', 'Subscriptions', 'Shopping',
@@ -508,6 +507,27 @@ function dataFromDocs(docs) {
   d.txns.sort((a, b) => a.date.localeCompare(b.date));
   for (const c of ['Income', 'Transfer', 'Other']) if (!d.cats.includes(c)) d.cats.push(c);
   return d;
+}
+
+/* Savings and investments used to be "goal" lines under Variable expenses. They now live only on the Growth tab,
+   so any entries on such a line become Growth deposits and the line is dropped. Returns the months it changed. */
+function migrateGoalLines(d) {
+  const goals = d.templates.filter(t => t.goal);
+  if (!goals.length) return null;
+  const touched = new Set();
+  for (const t of goals) {
+    const kind = t.category === 'Investing' ? 'investing' : 'savings';
+    for (const [ym, mo] of Object.entries(d.months)) {
+      const mine = (mo.spends || []).filter(s => s.t === t.id), keys = Object.keys(mo.entries).filter(k => k.startsWith(t.id + '@'));
+      if (!mine.length && !keys.length) continue;
+      mine.forEach(s => d.growth.push({ id: uid('g'), kind, date: s.date, amount: s.amount, ...(s.note ? { note: s.note } : {}) }));
+      mo.spends = (mo.spends || []).filter(s => s.t !== t.id);
+      keys.forEach(k => { delete mo.entries[k]; });
+      touched.add(ym);
+    }
+  }
+  d.templates = d.templates.filter(t => !t.goal);
+  return touched;
 }
 
 /* ---------- storage: private Claude storage when published, otherwise this browser ---------- */
@@ -577,9 +597,11 @@ const Store = {
     if (!docs) docs = await backend.list();
     this.known = new Set(Object.keys(docs));
     D = dataFromDocs(docs);
+    const moved = migrateGoalLines(D);
+    if (moved && !this.readonly) { touchMeta(); touchGrowth(); moved.forEach(touchMonth); }
     if (backend.mode === 'cloud-view') {
       let first = true;
-      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); if (typeof render === 'function') render(); });
+      backend.watch(next => { if (first) { first = false; return; } D = dataFromDocs(next); migrateGoalLines(D); if (typeof render === 'function') render(); });
     }
   },
   get mode() { return this.backend ? this.backend.mode : 'memory'; },
@@ -1015,38 +1037,25 @@ function setDueDate(ym, it, newDate, onlyThisMonth) {
   return { undo, day, key: nk };
 }
 /* ----- growth: overall savings and investment totals ----- */
-const GROWTH = [['savings', 'Savings', 'Savings'], ['investing', 'Investments', 'Investing']]; // [kind, label, category of the matching goal line]
-/* money put aside each month on goal lines (Variable expenses) whose category is the kind's */
-function growthContribs(cat) {
-  const ts = new Map(D.templates.filter(t => t.budget && t.goal && t.category === cat).map(t => [t.id, t])), out = [];
-  for (const [ym, mo] of Object.entries(D.months)) for (const s of mo.spends || []) if (ts.has(s.t)) out.push({ date: s.date, amount: s.amount, note: 'From ' + ts.get(s.t).name + (s.note ? ': ' + s.note : ''), manual: false });
-  return out;
-}
-function growthFor(kind, cat) {
-  const mine = D.growth.filter(e => e.kind === kind).map(e => ({ ...e, manual: true })), contribs = growthContribs(cat);
-  const manual = sum(mine, e => e.amount), monthly = sum(contribs, e => e.amount);
-  return { manual, monthly, total: r2(manual + monthly), rows: [...mine, ...contribs].sort((a, b) => b.date.localeCompare(a.date)) };
+const GROWTH = [['savings', 'Savings'], ['investing', 'Investments']]; // [kind, label]
+function growthFor(kind) {
+  const rows = D.growth.filter(e => e.kind === kind).sort((a, b) => b.date.localeCompare(a.date));
+  return { total: sum(rows, e => e.amount), rows };
 }
 function addGrowth(kind, amount, date, note, adj) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}), ...(adj ? { adj: true } : {}) }); touchGrowth(); }
 
 /* ----- the goal: a share of income received goes to savings and investments together ----- */
 const growthPct = () => { const p = D.settings.growthPct; return p > 0 ? p : 10; };
 const incomeReceived = ym => sum(itemsFor(ym).filter(i => i.type === 'income' && i.done && !i.skip), i => i.amount);
-/* new money put aside in a month: amounts on the goal lines plus deposits entered on the Growth tab
+/* new money put aside in a month: deposits entered on the Growth tab
    (set-to-a-new-total adjustments and withdrawals are not new money) */
-function asideFor(kind, cat, ym) {
-  const monthly = sum(growthContribs(cat).filter(c => ymOf(c.date) === ym), c => c.amount);
-  const deposits = sum(D.growth.filter(e => e.kind === kind && !e.adj && e.amount > 0 && ymOf(e.date) === ym), e => e.amount);
-  return r2(monthly + deposits);
-}
+const asideFor = (kind, ym) => sum(D.growth.filter(e => e.kind === kind && !e.adj && e.amount > 0 && ymOf(e.date) === ym), e => e.amount);
 function growthPlan(ym) {
   const pct = growthPct(), income = incomeReceived(ym), goal = r2(income * pct / 100);
-  const parts = GROWTH.map(([kind, label, cat]) => ({ kind, label, cat, done: asideFor(kind, cat, ym) }));
+  const parts = GROWTH.map(([kind, label]) => ({ kind, label, done: asideFor(kind, ym) }));
   const done = sum(parts, p => p.done), need = Math.max(0, r2(goal - done));
-  // split the whole goal between the two in the ratio of the monthly amounts set on their goal lines (evenly when both are not set),
-  // then suggest what each is still short of its share; if one has gone past its share the rest goes to the other
-  const w = parts.map(p => { const t = D.templates.find(x => x.budget && x.goal && x.category === p.cat); return t ? amountFor(t, ym) : 0; });
-  const share = w[0] > 0 && w[1] > 0 ? w[0] / (w[0] + w[1]) : 0.5, tgt0 = r2(goal * share), tgt = [tgt0, r2(goal - tgt0)];
+  // the goal is shared evenly; suggest what each side is still short of its half, and if one is past its half the rest goes to the other
+  const half = r2(goal / 2), tgt = [half, r2(goal - half)];
   let sug = parts.map((p, i) => Math.max(0, r2(tgt[i] - p.done)));
   const tot = sum(sug);
   if (tot > need && tot > 0) {
@@ -1442,7 +1451,7 @@ function viewMonth() {
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
   const late = S.bills.filter(i => itemStatus(i) === 'late').length;
-  const over = S.budgets.filter(i => i.amount > 0 && !i.tmpl.goal && i.spent > i.amount + 0.005);
+  const over = S.budgets.filter(i => i.amount > 0 && i.spent > i.amount + 0.005);
   const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
     <div class="stats">
@@ -1482,19 +1491,17 @@ function viewMonth() {
     <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="income">+ Repeating income</button>'}</div>
     ${incForm}
     ${inc.length ? `<ul class="list">${group(inc, false)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
-    <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
   </section>`;
   // bills first, then income, with the spending budgets in their own section at the bottom
   return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}`;
 }
 /* a variable expense: a monthly amount, a running total of what was spent, and red when it goes over.
-   No limit set just tracks; a goal (savings, investing) shows green when reached and never red. */
+   An amount of 0 means no limit set, so it just tracks. */
 function budgetHTML(b, ym) {
-  const ro = RO(), tid = b.tmpl.id, goal = !!b.tmpl.goal, nolimit = !(b.amount > 0), k = esc(b.key);
-  const over = !goal && !nolimit && b.spent > b.amount + 0.005, reached = goal && !nolimit && b.spent >= b.amount - 0.005;
-  const pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
-  const state = nolimit ? 'none' : over ? 'over' : reached ? 'done' : (!goal && pct >= 85) ? 'near' : 'ok';
-  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : reached ? '<span class="pill good">Goal reached</span>' : goal ? `<span class="pill">${money(left)} to go</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
+  const ro = RO(), tid = b.tmpl.id, nolimit = !(b.amount > 0), k = esc(b.key);
+  const over = !nolimit && b.spent > b.amount + 0.005, pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
+  const state = nolimit ? 'none' : over ? 'over' : pct >= 85 ? 'near' : 'ok';
+  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
   const expanded = ro || UI.open === b.key;
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
@@ -1503,7 +1510,7 @@ function budgetHTML(b, ym) {
     <${tag} class="bhead"${ro ? '' : ` data-act="pick-exp" data-id="${tid}" title="Add spending to ${esc(b.name)}"`}><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">${nolimit ? 'spent' : `of ${money(b.amount)}`}</span></span></${tag}>
     <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
     <div class="bsub">${pill}
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}${goal && (b.tmpl.category === 'Savings' || b.tmpl.category === 'Investing') && !ro ? '<span class="muted" style="font-size:12.5px">counts toward Growth</span>' : ''}</div>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}</div>
     ${expanded ? `<div class="bentries">${list}</div>` : ''}
   </li>`;
 }
@@ -1555,9 +1562,9 @@ function viewPlanner() {
 }
 
 /* ----- Growth: overall savings and investment totals ----- */
-function growthCard(kind, label, cat) {
-  const g = growthFor(kind, cat), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
-  return `<section class="card"><div class="card-h"><div><h2>${label}</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Total ${money(g.total)}</p></div></div>
+function growthCard(kind, label) {
+  const g = growthFor(kind), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
+  return `<section class="card"><div class="card-h"><h2>${label}</h2></div>
     <form class="growf" data-kind="${kind}" autocomplete="off">
       <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
       <input name="note" class="inp" type="text" placeholder="Note (optional)" aria-label="Note">
@@ -1565,11 +1572,10 @@ function growthCard(kind, label, cat) {
       <button class="btn primary sm" type="submit" value="add">Add</button><button class="btn sm" type="submit" value="out">Take out</button></form>
     <details class="more" style="margin:0 18px 14px"><summary>Set to a new total</summary><form class="growset" data-kind="${kind}" autocomplete="off" style="padding:0 0 12px">
       <input name="total" class="inp num" type="number" step="0.01" inputmode="decimal" placeholder="${money(g.total)}" aria-label="New total" required><button class="btn sm" type="submit">Update total</button>
-      <small class="muted" style="flex:1 1 100%">Records the difference as an entry, so the list below still adds up. Handy for investments that go up and down.</small></form></details>
-    ${g.monthly ? `<p class="muted" style="padding:0 18px 8px;font-size:13.5px">${money(g.manual)} entered here · ${money(g.monthly)} from your monthly ${label.toLowerCase()} line</p>` : ''}
-    ${rows.length ? `<ul class="entries gentries">${rows.map(e => `<li><span class="num muted">${fmtShort(e.date)}</span><span class="enote">${esc(e.note || '')}</span><span class="num${e.amount < 0 ? ' out-n' : ''}">${money(e.amount, { sign: true })}</span>${e.manual ? `<button class="btn ghost sm" data-act="del-growth" data-id="${e.id}" aria-label="Remove this entry" title="Remove">&times;</button>` : '<span></span>'}</li>`).join('')}</ul>
+      <small class="muted" style="flex:1 1 100%">Use this for a starting balance, or for investments that go up and down. The difference is recorded as an entry, so the list below still adds up.</small></form></details>
+    ${rows.length ? `<ul class="entries gentries">${rows.map(e => `<li><span class="num muted">${fmtShort(e.date)}</span><span class="enote">${esc(e.note || '')}</span><span class="num${e.amount < 0 ? ' out-n' : ''}">${money(e.amount, { sign: true })}</span><button class="btn ghost sm" data-act="del-growth" data-id="${e.id}" aria-label="Remove this entry" title="Remove">&times;</button></li>`).join('')}</ul>
       ${g.rows.length > 6 ? `<div class="card-f"><span class="muted">${all ? 'All' : 'Latest 6 of'} ${plural(g.rows.length, 'entry', 'entries')}</span><button class="btn ghost sm" data-act="growth-more" data-kind="${kind}">${all ? 'Show fewer' : 'Show all'}</button></div>` : ''}`
-      : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Add what you have now as a starting balance.</p>'}
+      : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Use "Set to a new total" to enter what you have now.</p>'}
   </section>`;
 }
 function goalCard() {
@@ -1586,13 +1592,13 @@ function goalCard() {
       <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
 }
 function viewGrowth() {
-  const gs = GROWTH.map(([k, l, c]) => ({ k, l, c, g: growthFor(k, c) })), total = sum(gs, x => x.g.total);
-  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals. Money you log on the Savings and Investment lines under Variable expenses is counted here automatically.</p></div></div>
+  const gs = GROWTH.map(([k, l]) => ({ k, l, g: growthFor(k) })), total = sum(gs, x => x.g.total);
+  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals.</p></div></div>
     <section class="card"><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
     <div style="margin-top:16px">${goalCard()}</div>
-    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l, x.c)}</div>`).join('')}</div>`;
+    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l)}</div>`).join('')}</div>`;
 }
 
 /* ----- one repeating item, as listed in Settings ----- */
@@ -1601,13 +1607,13 @@ function tmplRow(t) {
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}</span>
-    <span class="rmeta"><span>${t.budget ? (t.goal ? 'Monthly, put aside' : 'Monthly variable expense') : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span class="rmeta"><span>${t.budget ? 'Monthly variable expense' : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(amountFor(t, thisMonth()))}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
 
 /* ----- Bank (statements and spending in one place) ----- */
-const BANK_SUBS = [['reconcile', 'Match bills'], ['spending', 'Spending'], ['transactions', 'Transactions'], ['files', 'Files']];
+const BANK_SUBS = [['reconcile', 'Match bills'], ['spending', 'Spending'], ['transactions', 'Transactions']];
 function viewBank() {
   if (RO()) return viewSpending();
   if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Reconcile</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
@@ -1615,7 +1621,7 @@ function viewBank() {
       <p>Drop a CSV, OFX/QFX or PDF file here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
       <div class="actions" style="justify-content:center"><button class="btn primary" data-act="choose-files">Choose files</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div></div>`;
   const bar = `<div class="bankbar"><div class="seg" role="group" aria-label="Bank views">${BANK_SUBS.map(([id, l]) => `<button data-act="sub" data-sub="${id}" aria-pressed="${UI.sub === id}">${l}</button>`).join('')}</div><button class="btn primary sm" data-act="choose-files">+ Add statement</button></div>`;
-  const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? viewTxns() : UI.sub === 'files' ? viewFiles() : viewSpending();
+  const body = UI.sub === 'reconcile' ? viewReconcile() : UI.sub === 'transactions' ? `<div class="stack">${viewTxns()}${viewFiles()}</div>` : viewSpending();
   return sampleBanner() + bar + body;
 }
 function reconcileMonth() {
@@ -1869,7 +1875,6 @@ function openTemplateDialog(id, preset = {}, opts = {}) {
         <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months.</small></label>
           <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set when it stops. Older months keep their history.</small></label></div>
         ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
-        ${budget ? `<label class="checkline"><input id="tf-goal" type="checkbox"${TF.goal ? ' checked' : ''}><span>This is money I put aside (savings or investing). Reaching the amount is good, so it never turns red.</span></label>` : ''}
         ${t ? `<label class="field">A new amount or due day applies to<select id="tf-apply"><option value="from">${fmtMonth(TF.ctx)} and later (earlier months keep their old amount)</option><option value="all">Every month, including past ones</option></select></label>` : ''}
       </div></details>
     </div>
@@ -1891,7 +1896,6 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-apply')) TF.apply = $('#tf-apply').value;
-  if ($('#tf-goal')) TF.goal = $('#tf-goal').checked;
   if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
@@ -1903,7 +1907,7 @@ function submitTemplate() {
   const ok = /^\d{4}-\d{2}$/;
   const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category && TF.category !== 'Other' ? TF.category : (TF.editing ? 'Other' : guessCategory(TF.name))), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
-  if (TF.budget) { obj.budget = true; if (TF.goal) obj.goal = true; }
+  if (TF.budget) obj.budget = true;
   let t;
   if (TF.editing) {
     t = D.templates.find(x => x.id === TF.id);
@@ -1916,7 +1920,7 @@ function submitTemplate() {
     const relevant = ['amount', ...(obj.freq === 'twice' ? ['day', 'day2'] : obj.freq === 'weekly' || obj.freq === 'biweekly' ? ['anchor'] : ['day'])];
     const setBase = (f, v) => { if (v === undefined) delete t[f]; else t[f] = v; clearField(t, f); };
     reschedule(t, everywhere ? '' : TF.ctx, () => {
-      for (const k of ['start', 'end', 'match', 'autopay', 'budget', 'goal']) delete t[k];
+      for (const k of ['start', 'end', 'match', 'autopay', 'budget']) delete t[k];
       Object.assign(t, rest);
       if (freqChanged) { fields.forEach(f => setBase(f, next[f])); delete t.changes; }
       else relevant.forEach(f => { if (next[f] !== prev[f]) { if (TF.apply === 'all') setBase(f, next[f]); else setFieldFrom(t, TF.ctx, f, next[f]); } });
@@ -1936,13 +1940,7 @@ const guessCategory = name => { const c = autoCategory(name, -1); return NON_SPE
 /* ---------- one sheet to change a bill or income row ---------- */
 function openItemDialog(key) {
   const ym = curYm(), it = findItem(key, ym); if (!it) return;
-  const k = esc(key), verb = it.type === 'income' ? 'received' : 'paid', link = it.txn ? txnById(it.txn) : null;
-  let linkBlock = '';
-  if (D.txns.length) {
-    const cands = candidatePool(ym).map(t => ({ t, s: scoreMatch(it, t).s })).filter(x => x.s >= 0).sort((a, b) => b.s - a.s).slice(0, 25).map(x => x.t);
-    if (link && !cands.includes(link)) cands.unshift(link);
-    linkBlock = `<label class="field">Statement line<select id="if-link"><option value="">${link ? 'Unlink' : 'Not linked'}</option>${cands.map(t => `<option value="${t.id}"${link && link.id === t.id ? ' selected' : ''}>${fmtShort(t.date)} · ${esc(t.desc.slice(0, 40))} · ${money(Math.abs(t.amt))}</option>`).join('')}</select><small>Linking marks it ${verb} with the real date and amount.</small></label>`;
-  }
+  const k = esc(key);
   openModal(`<form id="itf" data-key="${k}">${dlgHead(esc(it.name), `${esc(fmtMonth(ym))}${it.rec ? ' · ' + esc(it.budget ? 'variable expense' : freqText(it.tmpl, ym)) : ' · one-off'}`)}
     <div class="dlg-b">
       <div class="grid2">
@@ -1954,7 +1952,6 @@ function openItemDialog(key) {
         <label class="checkline"><input type="radio" name="if-apply" value="once"> Only ${esc(fmtMonth(ym))}</label></fieldset>` : ''}
       ${it.done ? `<label class="field">${it.type === 'income' ? 'Received' : 'Paid'} on<input id="if-paid" type="date" value="${esc(it.doneDate || it.due)}"></label>` : ''}
       <label class="field">Note<input id="if-note" type="text" value="${esc(it.note)}" placeholder="Confirmation number, who to call…" autocomplete="off"></label>
-      ${linkBlock}
       <div class="actions sheet-more">${it.rec ? `<button type="button" class="btn ghost sm" data-act="edit-tmpl" data-id="${it.tmpl.id}">Edit name and schedule</button><button type="button" class="btn ghost sm" data-act="skip" data-key="${k}">${it.skip ? 'Restore this month' : 'Skip this month'}</button><button type="button" class="btn ghost sm bad" data-act="del-tmpl" data-id="${it.tmpl.id}">Remove…</button>` : `<button type="button" class="btn ghost sm bad" data-act="del-extra" data-key="${k}">Delete this item</button>`}</div>
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">Save</button></div></form>`);
@@ -1973,8 +1970,6 @@ function submitItem(f) {
     if (it.rec && !once) { mutateItem(ym, it, { amount: null }); setFieldFrom(it.tmpl, ym, 'amount', a); touchMeta(); }
     else mutateItem(ym, it, { amount: it.rec && a === it.planned ? null : a });
   }
-  const link = $('#if-link');
-  if (link && link.value !== (it.txn || '')) { const t = link.value ? txnById(link.value) : null; if (t) linkItem(ym, it, t); else unlinkItem(ym, it); }
   let undo = null, msg = 'Saved.';
   if (due !== it.due) {
     const r = setDueDate(ym, it, due, once);
@@ -2235,7 +2230,7 @@ async function restoreBackup(file) {
   askConfirm({ title: 'Replace everything with this backup?', text: `Backup from ${esc(obj.exported ? new Date(obj.exported).toLocaleString() : 'unknown date')}: ${plural(obj.data.templates.length, 'recurring item')}, ${plural((obj.data.txns || []).length, 'transaction')}. What you have now will be overwritten.`, ok: 'Replace', danger: true }, async () => {
     const d = Object.assign(emptyData(), obj.data);
     d.settings = Object.assign({ currency: 'USD' }, d.settings);
-    D = d; await Store.replaceAll(); render(); toast('Backup restored.');
+    D = d; migrateGoalLines(D); await Store.replaceAll(); render(); toast('Backup restored.');
   }, () => openSettings());
 }
 
@@ -2302,7 +2297,7 @@ const ACTIONS = {
   'load-sample': () => { if (!isBlank()) return; loadSample(); render(); toast('Example data loaded. Clear it any time from the banner.'); },
   'clear-sample': () => askConfirm({ title: 'Clear the example data?', text: 'This removes the example bills, income, statement lines and check-offs. Anything you added yourself while the examples were showing is removed too.', ok: 'Clear example data', danger: true },
     async () => { D = emptyData(); await Store.replaceAll(); UI.open = null; render(); toast('Cleared. You are starting fresh.'); }),
-  sub: el => { UI.sub = el.dataset.sub; render(); },
+  sub: el => { UI.sub = el.dataset.sub === 'files' ? 'transactions' : el.dataset.sub; render(); },
   'choose-files': () => $('#file').click(),
   'apply-sugg': () => {
     const ym = reconcileMonth(); let n = 0;
@@ -2421,7 +2416,7 @@ document.addEventListener('submit', e => {
   else if (e.target.classList.contains('growset')) {
     const kind = e.target.dataset.kind, row = GROWTH.find(x => x[0] === kind), t = parseFloat(e.target.elements.total.value);
     if (isNaN(t)) { toast('Enter the new total.'); return; }
-    const diff = r2(t - growthFor(kind, row[2]).total);
+    const diff = r2(t - growthFor(kind).total);
     if (!diff) { toast('That is already the total.'); return; }
     addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`, true);
     render(); toast(`${row[1]} is now ${money(t)}.`);
