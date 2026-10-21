@@ -1,5 +1,5 @@
 /* ---------- views ---------- */
-const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, gAll: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
+const UI = { tab: 'month', ym: thisMonth(), open: null, gAll: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
@@ -10,6 +10,7 @@ const ICON = {
   chevR: '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M7 3.5L12.5 9 7 14.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   gear: '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 6.8a3.2 3.2 0 100 6.4 3.2 3.2 0 000-6.4zm7 3.2l-1.6-.9a5.8 5.8 0 000-2.2l1.5-1-1.6-2.7-1.7.8a6 6 0 00-1.9-1.1L11 1.3H8l-.5 1.8a6 6 0 00-1.9 1.1l-1.7-.8-1.6 2.7 1.5 1a5.8 5.8 0 000 2.2L2.9 10l1.6 2.8 1.7-.8c.6.5 1.2.8 1.9 1.1l.4 1.8h3l.5-1.8c.7-.3 1.3-.6 1.9-1.1l1.7.8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
   pencil: '<svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 12l.6-2.9L9.4 2.3a1.3 1.3 0 011.8 0l.5.5a1.3 1.3 0 010 1.8L4.9 11.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+  plus: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -60,22 +61,23 @@ function viewMonth() {
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
-  const group = (list, allDone) => {
+  const group = list => {
     const open = list.filter(i => !i.done && !i.skip), done = list.filter(i => i.done || i.skip);
-    return open.map(rowHTML).join('') + (allDone && !open.length && done.length ? '<li class="alldone">Everything is paid. Nice.</li>' : '') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
+    return open.map(rowHTML).join('') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
   };
-  const expSel = buds.some(x => x.tmpl.id === UI.exp) ? UI.exp : (buds[0] && buds[0].tmpl.id);
-  const expForm = ro || !buds.length ? '' : `<form class="spendf" autocomplete="off">
-      ${buds.length > 1 ? `<select name="exp" class="inp" data-chg="exp" aria-label="Which expense">${buds.map(x => `<option value="${x.tmpl.id}"${x.tmpl.id === expSel ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<input type="hidden" name="exp" value="${expSel}">`}
-      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
-      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
-      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
-      <button class="btn primary sm" type="submit">Add</button></form>`;
-  const budgetCard = (buds.length || !ro) ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro || !buds.length ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Pick one, enter what you spend. The bar turns red if you go over.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="bill" data-budget="1">+ Add expense</button>'}</div>
-    ${buds.length ? `${expForm}<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul>` : '<p class="muted" style="padding:2px 18px 18px">Add things that change each month, like groceries or dining out, and keep a running total of what you spend.</p>'}</section>` : '';
+  // paid bills leave the list; a quiet line at the bottom brings them back (view-only copies show them, since seeing what is paid is the point)
+  const showPaid = UI.showPaid ?? ro;
+  const billList = list => {
+    const open = list.filter(i => !i.done && !i.skip), paid = list.filter(i => i.done || i.skip);
+    return open.map(rowHTML).join('') + (!open.length && paid.length ? '<li class="alldone">Everything is paid. Nice.</li>' : '')
+      + (showPaid ? paid.map(rowHTML).join('') : '')
+      + (paid.length ? `<li class="paidbar"><button type="button" class="btn ghost sm" data-act="toggle-paid" aria-expanded="${showPaid}">${showPaid ? 'Hide' : 'Show'} ${paid.some(i => i.skip) ? 'paid and skipped bills' : 'paid bills'} · ${paid.length}</button></li>` : '');
+  };
+  const budgetCard = (buds.length || !ro) ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro || !buds.length ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap + to log spending. Red when over.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="bill" data-budget="1">+ Add expense</button>'}</div>
+    ${buds.length ? `<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul><div class="card-f"><span class="total num">Spent ${money(sum(buds, x => x.spent))}</span></div>` : '<p class="muted" style="padding:2px 18px 18px">Add things that change each month, like groceries or dining out, and keep a running total of what you spend.</p>'}</section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><div><h2>Bills</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap a bill to change it.</p>'}</div>${ro ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div>
-    ${bills.length ? `<ul class="list">${group(bills, true)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
+    ${bills.length ? `<ul class="list">${billList(bills)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
     <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span></div>
   </section>`;
   const incNames = [...new Set([...D.templates.filter(t => t.type === 'income').map(t => t.name), ...Object.values(D.months).flatMap(m => m.extras.filter(x => x.type === 'income').map(x => x.name))])].slice(0, 30);
@@ -88,28 +90,33 @@ function viewMonth() {
   const incCard = `<section class="card">
     <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="income">+ Repeating income</button>'}</div>
     ${incForm}
-    ${inc.length ? `<ul class="list">${group(inc, false)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
+    ${inc.length ? `<ul class="list">${group(inc)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
   </section>`;
-  // bills first, then income, with the spending budgets in their own section at the bottom
-  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}`;
+  // bills with the variable expenses right under them, income beside (below, on a phone)
+  return nav + summary + `<div class="cols"><div class="stack">${billsCard}${budgetCard}</div><div class="stack">${incCard}</div></div>`;
 }
-/* a variable expense: a monthly amount, a running total of what was spent, and red when it goes over.
-   An amount of 0 means no limit set, so it just tracks. */
+/* a variable expense, laid out like a bill: + opens a small entry panel, the amount is what has been spent so far,
+   and the line turns red when it goes over. An amount of 0 means no limit set, so it just tracks. */
 function budgetHTML(b, ym) {
-  const ro = RO(), tid = b.tmpl.id, nolimit = !(b.amount > 0), k = esc(b.key);
-  const over = !nolimit && b.spent > b.amount + 0.005, pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
-  const state = nolimit ? 'none' : over ? 'over' : pct >= 85 ? 'near' : 'ok';
-  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
+  const ro = RO(), tid = b.tmpl.id, k = esc(b.key), nolimit = !(b.amount > 0);
+  const over = !nolimit && b.spent > b.amount + 0.005, left = r2(b.amount - b.spent);
+  const state = nolimit ? 'none' : over ? 'over' : b.spent >= b.amount * 0.85 ? 'near' : 'ok';
+  const meta = nolimit ? 'No limit set' : `of ${money(b.amount)} · ${over ? money(-left) + ' over' : money(left) + ' left'}`;
+  const open = UI.open === b.key;
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
-  const expanded = ro || UI.open === b.key;
+  const form = ro ? '' : `<form class="spendf" autocomplete="off"><input type="hidden" name="exp" value="${tid}">
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
+      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
+      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
+      <button class="btn primary sm" type="submit">Add</button></form>`;
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
-  const tag = ro ? 'div' : 'button';
-  return `<li class="brow ${state}">
-    <${tag} class="bhead"${ro ? '' : ` data-act="pick-exp" data-id="${tid}" title="Add spending to ${esc(b.name)}"`}><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">${nolimit ? 'spent' : `of ${money(b.amount)}`}</span></span></${tag}>
-    <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
-    <div class="bsub">${pill}
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}</div>
-    ${expanded ? `<div class="bentries">${list}</div>` : ''}
+  return `<li class="row vrow ${state}">
+    ${ro ? '<span class="chk-sp"></span>' : `<button class="chk add" data-act="open" data-key="${k}" aria-expanded="${open}" aria-label="Add spending to ${esc(b.name)}">${ICON.plus}</button>`}
+    <button class="rmain" data-act="open" data-key="${k}" aria-expanded="${open}">
+      <span class="rtext"><span class="rname">${esc(b.name)}</span><span class="rmeta"><span class="vm">${meta}</span></span></span>
+      <span class="ramt">${money(b.spent)}</span>
+    </button>
+    ${open ? `<div class="vpanel">${form}${list}${ro ? '' : `<div><button class="btn ghost sm" data-act="edit-tmpl" data-id="${tid}">Change name or limit</button></div>`}</div>` : ''}
   </li>`;
 }
 /* a bill or income row: tick it off with the box, tap the rest to change it */
@@ -126,7 +133,7 @@ function rowHTML(it) {
   </li>`;
 }
 
-/* ----- Planner: type in a paycheck and see what is left to pay and what is left over ----- */
+/* ----- Planner: type in a balance (a paycheck, or what is in the account) and see what is left to pay and what is left over ----- */
 function planRow(name, sub, cls, amount, bal) {
   return `<li class="prow ${cls}"><span class="ptxt"><span class="rname">${esc(name)}</span><span class="rmeta"><span class="due">${esc(sub)}</span></span></span>
     <span class="pright"><span class="ramt">${money(amount)}</span>${bal === null ? '' : `<span class="pbal num${bal < 0 ? ' neg' : ''}">${bal < 0 ? 'short ' + money(-bal) : money(bal) + ' left'}</span>`}</span></li>`;
@@ -142,20 +149,20 @@ function viewPlanner() {
   let bal = pay;
   const billRows = bills.map(i => { bal = r2(bal - i.amount); return planRow(i.name, dueText(i), itemStatus(i), i.amount, has ? bal : null); }).join('');
   const budRows = buds.map(x => { bal = r2(bal - x.left); return planRow(x.b.name, 'left to spend this month', 'budget', x.left, has ? bal : null); }).join('');
-  const form = `<section class="card"><div class="card-h"><div><h2>This paycheck</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Enter what you got paid. Bills still unpaid this month come out of it in due-date order.</p></div></div>
+  const form = `<section class="card"><div class="card-h"><div><h2>Your balance</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Enter the money you have to work with, such as a paycheck or what is in your account. Bills still unpaid this month come out of it in due-date order.</p></div></div>
     <form class="planf" autocomplete="off">
-      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Paycheck amount" aria-label="Paycheck amount" value="${has ? pay : ''}" required>
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Balance" aria-label="Balance" value="${has ? pay : ''}" required>
       <button class="btn primary" type="submit">${has ? 'Update' : 'Plan it'}</button>
-      ${has ? '<button type="button" class="btn" data-act="plan-log">Log it as income</button><button type="button" class="btn ghost" data-act="plan-clear">Clear</button>' : ''}
+      ${has ? '<button type="button" class="btn" data-act="plan-log" title="Record this amount as income received this month">Log as income</button><button type="button" class="btn ghost" data-act="plan-clear">Clear</button>' : ''}
     </form>${chips}</section>`;
   const stats = `<section class="card"><div class="stats three">
-    <div class="stat"><div class="lbl">Paycheck</div><div class="val">${has ? money(pay) : '—'}</div><div class="sub">${has ? 'entered above' : 'enter one above'}</div></div>
+    <div class="stat"><div class="lbl">Balance</div><div class="val">${has ? money(pay) : '—'}</div><div class="sub">${has ? 'entered above' : 'enter it above'}</div></div>
     <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(toPay)}</div><div class="sub">${plural(bills.length, 'bill')}${budTotal > 0 ? ` + ${money(budTotal)} to spend` : ''}</div></div>
-    <div class="stat"><div class="lbl">Left over</div><div class="val${has && over < 0 ? ' neg' : ''}">${has ? money(over) : '—'}</div><div class="sub">${has ? (over < 0 ? 'short after everything below' : 'after everything below') : 'after you enter a paycheck'}</div></div></div></section>`;
+    <div class="stat"><div class="lbl">Left over</div><div class="val${has && over < 0 ? ' neg' : ''}">${has ? money(over) : '—'}</div><div class="sub">${has ? (over < 0 ? 'short after everything below' : 'after everything below') : 'after you enter a balance'}</div></div></div></section>`;
   const list = (bills.length || buds.length) ? `<section class="card"><div class="card-h"><h2>What is left to pay in ${fmtMonth(ym)}</h2></div>
     <ul class="list">${billRows}${budRows ? `<li class="grp">Still to spend</li>${budRows}` : ''}</ul>
     <div class="card-f"><span class="total num">Total ${money(toPay)}</span>${has ? `<span class="num ${over < 0 ? 'neg-t' : 'muted'}" style="font-size:13px">${over < 0 ? 'Short ' + money(-over) : money(over) + ' left over'}</span>` : ''}</div></section>`
-    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan a paycheck.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="month">Add bills</button>')}</section>`;
+    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="month">Add bills</button>')}</section>`;
   return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
 }
 

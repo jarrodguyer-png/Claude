@@ -57,7 +57,7 @@ function moneyShort(n) {
    templates : recurring bills and income (the "monthly obligations")
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
-                 plan: {amount, source?} }                         (the paycheck typed into the Planner tab)
+                 plan: {amount, source?} }                         (the balance typed into the Planner tab)
    a template with budget:true is a variable expense (a monthly amount you spend against); an amount of 0 means no limit set
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month

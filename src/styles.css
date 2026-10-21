@@ -173,32 +173,24 @@ details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-
 .card-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line-2); font-size: 14px; }
 .card-f .total { font-weight: 600; }
 
-/* spending budgets */
-.brow { padding: 14px 18px 16px; border-top: 1px solid var(--line-2); display: grid; gap: 10px; }
-.bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; background: none; border: 0; padding: 0; width: 100%; text-align: left; color: inherit; }
-button.bhead { cursor: pointer; }
-button.bhead:hover .rname { color: var(--accent); }
-.bnum { font-size: 16px; font-weight: 500; }
-.bbar { height: 12px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line-2); overflow: hidden; }
-.bbar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; min-width: 0; }
-.brow.near .bbar i { background: var(--warn-fill); }
-.brow.over .bbar i { background: var(--bad); }
-.brow.done .bbar i { background: var(--good); }
-.brow.none .bbar { display: none; }
-.brow.over .bnum, .brow.over .bnum .muted { color: var(--bad); }
-.bsub { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
-.spendf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 12px; }
-.spendf select[name=exp] { flex: 1 1 100%; width: 100%; font-weight: 600; }
+/* variable expenses use the same rows as bills; the + opens a small entry panel */
+.chk.add { color: var(--ink-2); border-color: var(--line); }
+.chk.add:hover { color: var(--accent); border-color: var(--accent); }
+.chk-sp { width: 26px; height: 26px; }
+.vrow.over .ramt, .vrow.over .vm { color: var(--bad); }
+.vrow.over .vm, .vrow.near .vm { font-weight: 600; }
+.vrow.near .vm { color: var(--warn); }
+.vpanel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 2px 8px 12px 0; }
+.paidbar { padding: 6px 12px 8px; border-top: 1px solid var(--line-2); list-style: none; }
+.spendf { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 6px; }
 .spendf .inp { width: auto; min-width: 0; }
 .spendf input[name=amount] { flex: 1 1 110px; max-width: 150px; }
-.spendf .inp { width: auto; }
 .spendf input[name=note] { flex: 2 1 150px; }
 .spendf input[name=date] { flex: 0 1 150px; }
 .entries { list-style: none; margin: 0; padding: 0; display: grid; }
 .entries li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 36px; gap: 8px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line-2); font-size: 14px; }
 .entries .enote { overflow-wrap: anywhere; color: var(--ink-2); }
 .entries .btn { min-height: 30px; padding: 0 8px; }
-.bentries { display: grid; gap: 2px; }
 
 /* quick income entry */
 .incf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
@@ -221,6 +213,8 @@ button.bhead:hover .rname { color: var(--accent); }
 .mlabel { font-weight: 600; font-size: 14px; min-width: 9ch; text-align: center; }
 .goalbody { display: grid; gap: 10px; padding: 0 18px 18px; }
 .goalbody p { margin: 0; }
+.bbar { height: 12px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line-2); overflow: hidden; }
+.bbar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; min-width: 0; }
 .bbar.good i { background: var(--good); }
 .suggest { display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
 .goalpct { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }

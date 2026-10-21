@@ -129,7 +129,7 @@ function growthPlan(ym) {
   return { pct, income, goal, done, need, parts };
 }
 
-/* the paycheck typed into the Planner for a month */
+/* the balance typed into the Planner for a month */
 function setPlan(ym, amount, source) {
   const mo = ensureMonth(ym);
   if (amount > 0) mo.plan = { amount: r2(amount), ...(source ? { source } : {}) }; else delete mo.plan;

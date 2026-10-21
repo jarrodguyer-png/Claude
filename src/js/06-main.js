@@ -22,7 +22,11 @@ const ACTIONS = {
     const was = it.done; toggleDone(UI.ym, it); render();
     if (!was) toast(`${it.name} marked ${it.type === 'income' ? 'received' : 'paid'}.`, { action: 'Undo', ms: 4000, fn: () => { const again = findItem(el.dataset.key); if (again && again.done) { toggleDone(UI.ym, again); render(); } } });
   },
-  open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
+  open: el => {
+    UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render();
+    const f = UI.open && $('.spendf input[name=amount]'); if (f) { f.scrollIntoView({ block: 'nearest' }); f.focus(); }
+  },
+  'toggle-paid': () => { UI.showPaid = !(UI.showPaid ?? RO()); render(); },
   'edit-item': el => openItemDialog(el.dataset.key),
   'del-growth': el => {
     const i = D.growth.findIndex(e => e.id === el.dataset.id); if (i < 0) return;
@@ -36,7 +40,6 @@ const ACTIONS = {
     toast(`Put ${money(amt)} in ${row[1]}.`, { action: 'Undo', fn: () => { const i = D.growth.findIndex(e => e.kind === kind && e.amount === r2(amt) && e.note === `Suggested ${growthPct()}%`); if (i >= 0) { D.growth.splice(i, 1); touchGrowth(); render(); } } });
   },
   'growth-more': el => { UI.gAll = UI.gAll === el.dataset.kind ? null : el.dataset.kind; render(); },
-  'pick-exp': el => { UI.exp = el.dataset.id; render(); const f = $('.spendf input[name=amount]'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } },
   'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
   'plan-clear': () => { setPlan(UI.ym, 0); render(); },
   'plan-log': () => { const p = D.months[UI.ym] && D.months[UI.ym].plan; if (p) recordIncome(p.source || 'Paycheck', p.amount, entryDate(UI.ym)); },
@@ -147,7 +150,6 @@ const CHANGE = {
   fc: el => { UI.fc = el.value; UI.txLimit = 100; render(); },
   fu: el => { UI.fu = el.checked; UI.txLimit = 100; render(); },
   rm: el => { UI.rm = el.value; render(); },
-  exp: el => { UI.exp = el.value; },
   gpct: el => { const v = parseFloat(el.value); if (v > 0 && v <= 100) { D.settings.growthPct = v; touchMeta(); } render(); },
   range: el => { UI.range = el.value; render(); },
   currency: el => { D.settings.currency = el.value; touchMeta(); render(); },
@@ -187,7 +189,7 @@ document.addEventListener('submit', e => {
   }
   else if (e.target.classList.contains('planf')) {
     const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
-    if (isNaN(a) || a <= 0) { toast('Enter the amount you were paid.'); return; }
+    if (isNaN(a) || a <= 0) { toast('Enter your balance.'); return; }
     setPlan(UI.ym, a, prev && prev.amount === r2(a) ? prev.source : '');
     render();
   }

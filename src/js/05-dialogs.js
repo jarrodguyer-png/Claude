@@ -260,7 +260,6 @@ function submitExtra(type) {
 /* ---------- spending budget entries ---------- */
 function submitSpend(f) {
   const tid = f.elements.exp.value;
-  UI.exp = tid;
   const amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr(), note = f.elements.note.value.trim();
   if (isNaN(amount) || amount <= 0) { toast('Enter the amount you spent.'); return; }
   const ym = ymOf(date);
