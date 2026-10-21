@@ -19,13 +19,14 @@ function occurrences(t, ym) {
     default: return [clampDay(ym, t.day)];
   }
 }
+function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
   const items = [];
   for (const t of D.templates) {
     for (const due of occurrences(t, ym)) {
       const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {};
-      items.push({ key, rec: true, type: t.type, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
+      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
     }
   }
   for (const x of (mo && mo.extras) || []) {
@@ -34,7 +35,7 @@ function itemsFor(ym) {
   items.sort((a, b) => a.due.localeCompare(b.due) || a.name.localeCompare(b.name));
   return items;
 }
-function ensureMonth(ym) { return D.months[ym] || (D.months[ym] = { entries: {}, extras: [] }); }
+function ensureMonth(ym) { const mo = D.months[ym] || (D.months[ym] = { entries: {}, extras: [], spends: [] }); if (!mo.spends) mo.spends = []; return mo; }
 /* patch uses entry field names: done, date (paid date), amount, note, txn, skip */
 function mutateItem(ym, item, patch) {
   if (item.rec) {
@@ -67,10 +68,14 @@ function itemStatus(item) {
   return dayNum(item.due) - dayNum(t) <= 7 ? 'soon' : 'upcoming';
 }
 function summarize(items) {
-  const bills = items.filter(i => i.type === 'bill' && !i.skip), inc = items.filter(i => i.type === 'income' && !i.skip);
-  const billsTotal = sum(bills, i => i.amount), billsPaid = sum(bills.filter(i => i.done), i => i.amount);
+  const live = items.filter(i => i.type === 'bill' && !i.skip);
+  const bills = live.filter(i => !i.budget), budgets = live.filter(i => i.budget), inc = items.filter(i => i.type === 'income' && !i.skip);
+  const fixedTotal = sum(bills, i => i.amount), fixedPaid = sum(bills.filter(i => i.done), i => i.amount);
+  // a budget counts at its limit, or at what was really spent when that is higher
+  const budgetPlan = sum(budgets, i => Math.max(i.amount, i.spent)), budgetSpent = sum(budgets, i => i.spent), budgetLeft = sum(budgets, i => Math.max(0, i.amount - i.spent));
+  const billsTotal = r2(fixedTotal + budgetPlan), billsPaid = r2(fixedPaid + budgetSpent);
   const incomeTotal = sum(inc, i => i.amount), incomeGot = sum(inc.filter(i => i.done), i => i.amount);
-  return { bills, inc, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
+  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
 }
 function dueText(item) {
   const diff = dayNum(item.due) - dayNum(todayStr());
@@ -198,7 +203,7 @@ function candidatePool(ym) {
   return D.txns.filter(t => !linked.has(t.id) && dayNum(t.date) >= lo && dayNum(t.date) <= hi);
 }
 function suggestMatches(ym) {
-  const items = itemsFor(ym).filter(i => !i.skip && !i.txn);
+  const items = itemsFor(ym).filter(i => !i.skip && !i.txn && !i.budget);
   const pool = candidatePool(ym);
   const pairs = [];
   for (const it of items) for (const tx of pool) { const sc = scoreMatch(it, tx); if (sc.s >= 3) pairs.push({ it, tx, s: sc.s, why: sc.why }); }
@@ -294,6 +299,7 @@ function loadSample() {
     T('bill', 'Spotify', 11.99, 'Subscriptions', 20, 'spotify'),
     T('bill', 'Car insurance', 132, 'Insurance', 22, 'shieldmutual'),
     T('bill', 'Student loan', 210, 'Debt', 25, 'loanserv'),
+    T('bill', 'Groceries', 600, 'Groceries', 1, '', { budget: true }),
     T('income', 'Paycheck', 2150, 'Income', 5, 'acme payroll', { freq: 'twice', day2: 20 })
   ];
   const txns = [];
@@ -302,6 +308,7 @@ function loadSample() {
     const ym = addMonths(start, k);
     const day = n => clampDay(ym, n);
     for (const t of d.templates) {
+      if (t.budget) continue; // budgets are spent through the grocery lines below
       for (const due of occurrences(t, ym)) {
         const dd = fromDayNum(dayNum(due) + (t.type === 'bill' ? Math.floor(rnd() * 3) : 0));
         let amt = t.amount; if (t.name === 'Electric') amt = 78 + Math.round(rnd() * 5200) / 100;
@@ -322,11 +329,16 @@ function loadSample() {
   txns.sort((a, b) => a.date.localeCompare(b.date));
   d.txns = txns;
   d.imports = [{ id: 'sample', name: 'Example statement.csv', label: 'Example checking', at: Date.now(), count: txns.length, from: txns[0].date, to: txns[txns.length - 1].date }];
+  const gid = d.templates.find(t => t.budget).id;
+  [[start, [[4, 61.2, 'Weekly shop'], [12, 88.45, 'Market'], [20, 54.1, ''], [27, 97.8, 'Costco']]], [addMonths(start, 1), [[5, 70.3, ''], [13, 82, 'Weekly shop'], [21, 95.6, 'Market'], [28, 133.4, 'Party food']]], [cur, [[3, 64.9, 'Weekly shop'], [9, 112.35, 'Market'], [15, 148.2, 'Costco'], [18, 91.0, '']]]].forEach(([ym, list]) => {
+    d.months[ym] = d.months[ym] || { entries: {}, extras: [], spends: [] };
+    list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
+  });
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);
   old.forEach(p => linkItem(start, p.it, p.tx));
-  for (const it of itemsFor(cur)) if (it.due < addMonths(cur, 0) + '-' + pad(Math.max(1, +today.slice(8, 10) - 3))) mutateItem(cur, it, { done: true, date: it.due });
+  for (const it of itemsFor(cur)) if (!it.budget && it.due < addMonths(cur, 0) + '-' + pad(Math.max(1, +today.slice(8, 10) - 3))) mutateItem(cur, it, { done: true, date: it.due });
   allDocKeys().forEach(k => dirty.add(k));
   Store.schedule();
 }

@@ -71,23 +71,23 @@ let TF = null;
 function openTemplateDialog(id, preset = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
-  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, start: thisMonth(), end: '' }, preset);
+  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
-  const word = type === 'income' ? 'income' : 'bill';
-  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, t ? 'Changes apply to every month that includes it.' : '')}
+  const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
+  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
     <div class="dlg-b">
-      <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : 'Electric'}" autocomplete="off"></label>
-        <label class="field">Amount<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
-      <div class="grid2"><label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
+        <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
+      <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
         ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
-      <div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>
+      ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
       <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months you want to reconcile.</small></label>
-        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when you stop paying it. Older months keep their history.</small></label></div>
-      <label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>
-      ${type === 'bill' ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
+        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when it stops. Older months keep their history.</small></label></div>
+      ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
+      ${type === 'bill' && !budget ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
     </div>
     <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
-  $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
+  if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
   if (t) $('#tf-del').onclick = e => {
     const b = e.currentTarget;
     if (b.dataset.sure) { D.templates = D.templates.filter(x => x.id !== t.id); touchMeta(); closeModal(true); render(); toast(`Deleted ${t.name}.`); return; }
@@ -107,19 +107,21 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
-  if (!soft) TF.freq = g('tf-freq');
+  if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
   readTmplForm();
   const amount = parseFloat(TF.amount);
+  if (TF.budget && !TF.name) { toast('Add a name and a monthly budget.'); return; }
   if (!TF.name || isNaN(amount) || amount < 0) { toast('Add a name and an amount.'); return; }
   if ((TF.freq === 'weekly' || TF.freq === 'biweekly') && !TF.anchor) { toast('Pick a date it lands on.'); return; }
   const ok = /^\d{4}-\d{2}$/;
-  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.freq, day: Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
+  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
   if (!obj.autopay) delete obj.autopay;
+  if (TF.budget) obj.budget = true;
   let t;
-  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay']) delete t[k]; Object.assign(t, obj); }
+  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k]; Object.assign(t, obj); }
   else { t = { id: uid('b'), ...obj }; D.templates.push(t); }
   touchMeta();
   const link = TF.linkTxn && txnById(TF.linkTxn);
@@ -148,6 +150,25 @@ function submitExtra(type) {
   if (done) { x.done = true; x.doneDate = date > todayStr() ? todayStr() : date; }
   ensureMonth(ym).extras.push(x); touchMonth(ym);
   UI.ym = ym; closeModal(true); render(); toast(`Added ${name}.`);
+}
+
+/* ---------- spending budget entries ---------- */
+function submitSpend(f) {
+  const amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr(), note = f.elements.note.value.trim();
+  if (isNaN(amount) || amount <= 0) { toast('Enter the amount you spent.'); return; }
+  const ym = ymOf(date);
+  ensureMonth(ym).spends.push({ id: uid('s'), t: f.dataset.tid, date, amount: r2(amount), ...(note ? { note } : {}) });
+  touchMonth(ym);
+  const tid = f.dataset.tid;
+  render();
+  if (ym !== UI.ym) toast(`Added to ${fmtMonth(ym)}.`);
+  if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
+}
+function removeSpend(id) {
+  const mo = D.months[UI.ym], s = mo && mo.spends.find(x => x.id === id);
+  if (!s) return;
+  mo.spends = mo.spends.filter(x => x.id !== id); touchMonth(UI.ym); render();
+  toast(`Removed ${money(s.amount)}.`, { action: 'Undo', fn: () => { ensureMonth(UI.ym).spends.push(s); touchMonth(UI.ym); render(); } });
 }
 
 /* ---------- statement import ---------- */

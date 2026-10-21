@@ -48,7 +48,9 @@ function moneyShort(n) {
 
 /* ---------- data model ----------
    templates : recurring bills and income (the "monthly obligations")
-   months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items] }
+   months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
+                 spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
+   a template with budget:true is a monthly spending limit rather than a fixed payment
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -80,11 +82,11 @@ const dirty = new Set();
 const touchMeta = () => { dirty.add('meta'); Store.schedule(); };
 const touchMonth = ym => { dirty.add('m_' + ym); Store.schedule(); };
 const touchTxns = ym => { dirty.add('t_' + ym); Store.schedule(); };
-const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length);
+const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length);
 
 function buildDoc(key) {
   if (key === 'meta') return { v: 1, settings: D.settings, templates: D.templates, rules: D.rules, cats: D.cats, imports: D.imports, sample: D.sample };
-  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras } : null; }
+  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [] } : null; }
   if (key.startsWith('t_')) { const ym = key.slice(2); const list = D.txns.filter(t => ymOf(t.date) === ym); return list.length ? { list } : null; }
   return null;
 }
@@ -106,7 +108,7 @@ function dataFromDocs(docs) {
     d.sample = !!meta.sample;
   }
   for (const [k, v] of Object.entries(docs)) {
-    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [] };
+    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [] };
     else if (k.startsWith('t_')) d.txns.push(...(v.list || []));
   }
   d.txns.sort((a, b) => a.date.localeCompare(b.date));

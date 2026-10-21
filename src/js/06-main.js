@@ -26,7 +26,8 @@ const ACTIONS = {
     UI.open = null; render(); toast(`Deleted ${it.name}.`);
   },
   'edit-tmpl': el => openTemplateDialog(el.dataset.id),
-  'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type }),
+  'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type, budget: el.dataset.budget === '1' }),
+  'del-spend': el => removeSpend(el.dataset.id),
   'add-extra': el => openExtraDialog(el.dataset.type),
   'load-sample': () => { if (!isBlank()) return; loadSample(); render(); toast('Example data loaded. Clear it any time from the banner.'); },
   'clear-sample': () => askConfirm({ title: 'Clear the example data?', text: 'This removes the example bills, income, statement lines and check-offs. Anything you added yourself while the examples were showing is removed too.', ok: 'Clear example data', danger: true },
@@ -145,6 +146,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'tf') submitTemplate();
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
+  else if (e.target.classList.contains('spendf')) submitSpend(e.target);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

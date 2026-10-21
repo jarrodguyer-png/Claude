@@ -35,6 +35,7 @@
   --bad-soft: #fbe3e3;
   --s1: #2a78d6;
   --s2: #eb6834;
+  --warn-fill: #d99a1c;
   --shadow: 0 1px 2px rgba(16, 26, 40, .06), 0 6px 18px rgba(16, 26, 40, .05);
   --f-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
   --f-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -45,7 +46,7 @@
     --bg: #0d121a; --surface: #151c27; --surface-2: #1b2432; --ink: #e9eef6; --ink-2: #b2bdcc; --muted: #8c98aa;
     --line: #2a3445; --line-2: #222b3a; --accent: #74abf0; --accent-ink: #0a1523; --accent-soft: #18283f; --accent-line: #2c4a73;
     --good: #52c585; --good-soft: #143324; --warn: #e7b44f; --warn-soft: #35290f; --bad: #ff8585; --bad-soft: #3b1a1c;
-    --s1: #3987e5; --s2: #d95926; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .3);
+    --s1: #3987e5; --s2: #d95926; --warn-fill: #e7b44f; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .3);
     color-scheme: dark;
   }
 }
@@ -53,7 +54,7 @@
   --bg: #0d121a; --surface: #151c27; --surface-2: #1b2432; --ink: #e9eef6; --ink-2: #b2bdcc; --muted: #8c98aa;
   --line: #2a3445; --line-2: #222b3a; --accent: #74abf0; --accent-ink: #0a1523; --accent-soft: #18283f; --accent-line: #2c4a73;
   --good: #52c585; --good-soft: #143324; --warn: #e7b44f; --warn-soft: #35290f; --bad: #ff8585; --bad-soft: #3b1a1c;
-  --s1: #3987e5; --s2: #d95926; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .3);
+  --s1: #3987e5; --s2: #d95926; --warn-fill: #e7b44f; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .3);
   color-scheme: dark;
 }
 
@@ -169,6 +170,27 @@ button { cursor: pointer; }
 .detail .fgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .card-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line-2); font-size: 14px; }
 .card-f .total { font-weight: 600; }
+
+/* spending budgets */
+.brow { padding: 14px 18px 16px; border-top: 1px solid var(--line-2); display: grid; gap: 10px; }
+.bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; }
+.bnum { font-size: 16px; font-weight: 500; }
+.bbar { height: 12px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line-2); overflow: hidden; }
+.bbar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; min-width: 0; }
+.brow.near .bbar i { background: var(--warn-fill); }
+.brow.over .bbar i { background: var(--bad); }
+.brow.over .bnum, .brow.over .bnum .muted { color: var(--bad); }
+.bsub { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.spendf { display: flex; flex-wrap: wrap; gap: 8px; }
+.spendf .inp { width: auto; min-width: 0; }
+.spendf input[name=amount] { flex: 1 1 110px; max-width: 150px; }
+.spendf input[name=note] { flex: 2 1 150px; }
+.spendf input[name=date] { flex: 0 1 150px; }
+.entries { list-style: none; margin: 0; padding: 0; display: grid; }
+.entries li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 36px; gap: 8px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line-2); font-size: 14px; }
+.entries .enote { overflow-wrap: anywhere; color: var(--ink-2); }
+.entries .btn { min-height: 30px; padding: 0 8px; }
+.bentries { display: grid; gap: 2px; }
 
 /* forms */
 .field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 0; }
@@ -338,7 +360,9 @@ function moneyShort(n) {
 
 /* ---------- data model ----------
    templates : recurring bills and income (the "monthly obligations")
-   months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items] }
+   months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
+                 spends: [{id,t:templateId,date,amount,note}] }   (spends are purchases entered against a spending budget)
+   a template with budget:true is a monthly spending limit rather than a fixed payment
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -370,11 +394,11 @@ const dirty = new Set();
 const touchMeta = () => { dirty.add('meta'); Store.schedule(); };
 const touchMonth = ym => { dirty.add('m_' + ym); Store.schedule(); };
 const touchTxns = ym => { dirty.add('t_' + ym); Store.schedule(); };
-const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length);
+const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length);
 
 function buildDoc(key) {
   if (key === 'meta') return { v: 1, settings: D.settings, templates: D.templates, rules: D.rules, cats: D.cats, imports: D.imports, sample: D.sample };
-  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras } : null; }
+  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [] } : null; }
   if (key.startsWith('t_')) { const ym = key.slice(2); const list = D.txns.filter(t => ymOf(t.date) === ym); return list.length ? { list } : null; }
   return null;
 }
@@ -396,7 +420,7 @@ function dataFromDocs(docs) {
     d.sample = !!meta.sample;
   }
   for (const [k, v] of Object.entries(docs)) {
-    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [] };
+    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [] };
     else if (k.startsWith('t_')) d.txns.push(...(v.list || []));
   }
   d.txns.sort((a, b) => a.date.localeCompare(b.date));
@@ -829,13 +853,14 @@ function occurrences(t, ym) {
     default: return [clampDay(ym, t.day)];
   }
 }
+function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
   const items = [];
   for (const t of D.templates) {
     for (const due of occurrences(t, ym)) {
       const key = t.id + '@' + due, e = (mo && mo.entries[key]) || {};
-      items.push({ key, rec: true, type: t.type, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
+      items.push({ key, rec: true, type: t.type, budget: !!t.budget, spent: t.budget ? sum(spendsFor(ym, t.id), s => s.amount) : 0, name: t.name, category: t.category, due, planned: t.amount, amount: e.amount ?? t.amount, done: !!e.done, doneDate: e.date || null, skip: !!e.skip, note: e.note || '', txn: e.txn || null, tmpl: t, autopay: !!t.autopay });
     }
   }
   for (const x of (mo && mo.extras) || []) {
@@ -844,7 +869,7 @@ function itemsFor(ym) {
   items.sort((a, b) => a.due.localeCompare(b.due) || a.name.localeCompare(b.name));
   return items;
 }
-function ensureMonth(ym) { return D.months[ym] || (D.months[ym] = { entries: {}, extras: [] }); }
+function ensureMonth(ym) { const mo = D.months[ym] || (D.months[ym] = { entries: {}, extras: [], spends: [] }); if (!mo.spends) mo.spends = []; return mo; }
 /* patch uses entry field names: done, date (paid date), amount, note, txn, skip */
 function mutateItem(ym, item, patch) {
   if (item.rec) {
@@ -877,10 +902,14 @@ function itemStatus(item) {
   return dayNum(item.due) - dayNum(t) <= 7 ? 'soon' : 'upcoming';
 }
 function summarize(items) {
-  const bills = items.filter(i => i.type === 'bill' && !i.skip), inc = items.filter(i => i.type === 'income' && !i.skip);
-  const billsTotal = sum(bills, i => i.amount), billsPaid = sum(bills.filter(i => i.done), i => i.amount);
+  const live = items.filter(i => i.type === 'bill' && !i.skip);
+  const bills = live.filter(i => !i.budget), budgets = live.filter(i => i.budget), inc = items.filter(i => i.type === 'income' && !i.skip);
+  const fixedTotal = sum(bills, i => i.amount), fixedPaid = sum(bills.filter(i => i.done), i => i.amount);
+  // a budget counts at its limit, or at what was really spent when that is higher
+  const budgetPlan = sum(budgets, i => Math.max(i.amount, i.spent)), budgetSpent = sum(budgets, i => i.spent), budgetLeft = sum(budgets, i => Math.max(0, i.amount - i.spent));
+  const billsTotal = r2(fixedTotal + budgetPlan), billsPaid = r2(fixedPaid + budgetSpent);
   const incomeTotal = sum(inc, i => i.amount), incomeGot = sum(inc.filter(i => i.done), i => i.amount);
-  return { bills, inc, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
+  return { bills, budgets, inc, fixedTotal, billsTotal, billsPaid, billsLeft: r2(billsTotal - billsPaid), billsDone: bills.filter(i => i.done).length, budgetSpent, budgetLeft, incomeTotal, incomeGot, leftover: r2(incomeTotal - billsTotal) };
 }
 function dueText(item) {
   const diff = dayNum(item.due) - dayNum(todayStr());
@@ -1008,7 +1037,7 @@ function candidatePool(ym) {
   return D.txns.filter(t => !linked.has(t.id) && dayNum(t.date) >= lo && dayNum(t.date) <= hi);
 }
 function suggestMatches(ym) {
-  const items = itemsFor(ym).filter(i => !i.skip && !i.txn);
+  const items = itemsFor(ym).filter(i => !i.skip && !i.txn && !i.budget);
   const pool = candidatePool(ym);
   const pairs = [];
   for (const it of items) for (const tx of pool) { const sc = scoreMatch(it, tx); if (sc.s >= 3) pairs.push({ it, tx, s: sc.s, why: sc.why }); }
@@ -1104,6 +1133,7 @@ function loadSample() {
     T('bill', 'Spotify', 11.99, 'Subscriptions', 20, 'spotify'),
     T('bill', 'Car insurance', 132, 'Insurance', 22, 'shieldmutual'),
     T('bill', 'Student loan', 210, 'Debt', 25, 'loanserv'),
+    T('bill', 'Groceries', 600, 'Groceries', 1, '', { budget: true }),
     T('income', 'Paycheck', 2150, 'Income', 5, 'acme payroll', { freq: 'twice', day2: 20 })
   ];
   const txns = [];
@@ -1112,6 +1142,7 @@ function loadSample() {
     const ym = addMonths(start, k);
     const day = n => clampDay(ym, n);
     for (const t of d.templates) {
+      if (t.budget) continue; // budgets are spent through the grocery lines below
       for (const due of occurrences(t, ym)) {
         const dd = fromDayNum(dayNum(due) + (t.type === 'bill' ? Math.floor(rnd() * 3) : 0));
         let amt = t.amount; if (t.name === 'Electric') amt = 78 + Math.round(rnd() * 5200) / 100;
@@ -1132,11 +1163,16 @@ function loadSample() {
   txns.sort((a, b) => a.date.localeCompare(b.date));
   d.txns = txns;
   d.imports = [{ id: 'sample', name: 'Example statement.csv', label: 'Example checking', at: Date.now(), count: txns.length, from: txns[0].date, to: txns[txns.length - 1].date }];
+  const gid = d.templates.find(t => t.budget).id;
+  [[start, [[4, 61.2, 'Weekly shop'], [12, 88.45, 'Market'], [20, 54.1, ''], [27, 97.8, 'Costco']]], [addMonths(start, 1), [[5, 70.3, ''], [13, 82, 'Weekly shop'], [21, 95.6, 'Market'], [28, 133.4, 'Party food']]], [cur, [[3, 64.9, 'Weekly shop'], [9, 112.35, 'Market'], [15, 148.2, 'Costco'], [18, 91.0, '']]]].forEach(([ym, list]) => {
+    d.months[ym] = d.months[ym] || { entries: {}, extras: [], spends: [] };
+    list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
+  });
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);
   old.forEach(p => linkItem(start, p.it, p.tx));
-  for (const it of itemsFor(cur)) if (it.due < addMonths(cur, 0) + '-' + pad(Math.max(1, +today.slice(8, 10) - 3))) mutateItem(cur, it, { done: true, date: it.due });
+  for (const it of itemsFor(cur)) if (!it.budget && it.due < addMonths(cur, 0) + '-' + pad(Math.max(1, +today.slice(8, 10) - 3))) mutateItem(cur, it, { done: true, date: it.due });
   allDocKeys().forEach(k => dirty.add(k));
   Store.schedule();
 }
@@ -1184,30 +1220,57 @@ function viewMonth() {
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
   const late = S.bills.filter(i => itemStatus(i) === 'late').length;
+  const over = S.budgets.filter(i => i.spent > i.amount + 0.005);
+  const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
     <div class="stats">
-      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(S.bills.length - S.billsDone, 'bill')} left</div></div>
-      <div class="stat"><div class="lbl">Paid so far</div><div class="val">${money(S.billsPaid)}</div><div class="sub">${S.billsDone} of ${S.bills.length} bills</div></div>
+      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(openBills, 'bill')} left${S.budgetLeft > 0 ? ` + ${money(S.budgetLeft)} still to spend` : ''}</div></div>
+      <div class="stat"><div class="lbl">Paid so far</div><div class="val">${money(S.billsPaid)}</div><div class="sub">${S.billsDone} of ${S.bills.length} bills${S.budgets.length ? ` + ${money(S.budgetSpent)} spent` : ''}</div></div>
       <div class="stat"><div class="lbl">Income received</div><div class="val">${money(S.incomeGot)}</div><div class="sub">of ${money(S.incomeTotal)} expected</div></div>
-      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">expected income minus all bills</div></div>
+      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">expected income minus bills and budgets</div></div>
     </div>
-    <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid"><i style="width:${pct}%"></i></div>
-      <div class="cap"><span>${pct}% of this month's bills paid</span>${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}</div></div>
+    <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
+      <div class="cap"><span>${pct}% of this month's money paid or spent</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
   </section>`;
-  const bills = items.filter(i => i.type === 'bill'), inc = items.filter(i => i.type === 'income');
+  const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
   const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
+  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Spending budgets</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter each purchase. The bar turns red if you go over.</p>'}</div></div>
+    <ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><h2>Bills</h2><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label></div>
     ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
-    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
+    <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
   </section>`;
   const incCard = `<section class="card">
     <div class="card-h"><h2>Income</h2></div>
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button>'}</div>
   </section>
-  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
-  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>`;
+  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
+  return nav + summary + `<div class="cols"><div class="stack">${budgetCard}${billsCard}</div><div class="stack">${incCard}</div></div>`;
+}
+/* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
+function budgetHTML(b, ym) {
+  const ro = RO(), cur = thisMonth(), tid = b.tmpl.id, k = esc(b.key);
+  const over = b.spent > b.amount + 0.005, pct = b.amount > 0 ? Math.min(100, b.spent / b.amount * 100) : (b.spent > 0 ? 100 : 0);
+  const state = over ? 'over' : pct >= 85 ? 'near' : 'ok', left = r2(b.amount - b.spent);
+  const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
+  const expanded = ro || UI.open === b.key;
+  const defDate = ym === cur ? todayStr() : ym < cur ? `${ym}-${pad(daysIn(ym))}` : `${ym}-01`;
+  const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
+  return `<li class="brow ${state}">
+    <div class="bhead"><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">of ${money(b.amount)}</span></span></div>
+    <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
+    <div class="bsub"><span class="pill ${over ? 'bad' : state === 'near' ? 'warn' : ''}">${over ? `${money(-left)} over budget` : `${money(left)} left`}</span>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button>`}</div>
+    ${ro ? '' : `<form class="spendf" data-tid="${tid}" autocomplete="off">
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount spent on ${esc(b.name)}" required>
+      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
+      <input name="date" class="inp" type="date" value="${defDate}" aria-label="Date">
+      <button class="btn primary sm" type="submit">Add</button></form>`}
+    ${expanded ? `<div class="bentries">${list}${ro ? '' : `<div class="fgrid" style="margin-top:8px"><label class="field">Budget this month<input class="num" type="number" step="0.01" min="0" value="${b.amount}" data-chg="amount" data-key="${k}"><small>Changes this month only. Edit the budget under Obligations to change every month.</small></label></div>
+      <div class="actions" style="margin-top:8px"><button class="btn sm" data-act="edit-tmpl" data-id="${tid}">Edit budget…</button></div>`}</div>` : ''}
+  </li>`;
 }
 function rowHTML(it) {
   const ro = RO(), st = itemStatus(it), open = UI.open === it.key && !ro, verb = it.type === 'income' ? 'received' : 'paid';
@@ -1250,7 +1313,7 @@ function viewObligations() {
   const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
   const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
   const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
-    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div>'}</div>`;
+    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button><button class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">Add budget</button></div>'}</div>`;
   if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && t.anchor ? +t.anchor.slice(8, 10) : (t.day || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
@@ -1279,7 +1342,7 @@ function tmplRow(t) {
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-    <span class="rmeta"><span>${esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(t.amount)}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
@@ -1304,7 +1367,7 @@ function reconcileMonth() {
 }
 function viewReconcile() {
   const ym = reconcileMonth(), ms = txnMonths();
-  const items = itemsFor(ym).filter(i => !i.skip);
+  const items = itemsFor(ym).filter(i => !i.skip && !i.budget);
   const sugg = suggestMatches(ym);
   const suggKeys = new Set(sugg.map(p => p.it.key)), suggTx = new Set(sugg.map(p => p.tx.id));
   const mtx = D.txns.filter(t => ymOf(t.date) === ym);
@@ -1530,23 +1593,23 @@ let TF = null;
 function openTemplateDialog(id, preset = {}) {
   const t = id ? D.templates.find(x => x.id === id) : null;
   const type = t ? t.type : (preset.type || 'bill');
-  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, start: thisMonth(), end: '' }, preset);
+  TF = t ? { ...t } : Object.assign({ type, name: '', amount: '', category: type === 'income' ? 'Income' : 'Other', freq: 'monthly', day: 1, day2: 15, anchor: todayStr(), month: +thisMonth().slice(5), match: '', autopay: false, budget: false, start: thisMonth(), end: '' }, preset);
   TF.id = t ? t.id : null; TF.editing = !!t;
-  const word = type === 'income' ? 'income' : 'bill';
-  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, t ? 'Changes apply to every month that includes it.' : '')}
+  const budget = !!TF.budget, word = type === 'income' ? 'income' : budget ? 'budget' : 'bill';
+  openModal(`<form id="tf">${dlgHead(`${t ? 'Edit' : 'Add'} ${word}`, budget ? 'A monthly limit. You enter what you spend and it keeps a running total.' : t ? 'Changes apply to every month that includes it.' : '')}
     <div class="dlg-b">
-      <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : 'Electric'}" autocomplete="off"></label>
-        <label class="field">Amount<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
-      <div class="grid2"><label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="grid2"><label class="field">Name<input id="tf-name" type="text" value="${esc(TF.name)}" required placeholder="${type === 'income' ? 'Paycheck' : budget ? 'Groceries' : 'Electric'}" autocomplete="off"></label>
+        <label class="field">${budget ? 'Monthly budget' : 'Amount'}<input id="tf-amount" class="num" type="number" step="0.01" min="0" value="${TF.amount}" required inputmode="decimal"></label></div>
+      <div class="grid2">${budget ? '' : `<label class="field">Repeats<select id="tf-freq">${Object.entries(FREQ).map(([k, l]) => `<option value="${k}"${TF.freq === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`}
         ${type === 'bill' ? `<label class="field">Category<select id="tf-cat">${catOptions(TF.category, spendCats())}</select></label>` : ''}</div>
-      <div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>
+      ${budget ? '' : `<div class="grid2" id="tf-dyn">${tmplFields(TF)}</div>`}
       <div class="grid2"><label class="field">Starts in<input id="tf-start" type="month" value="${esc(TF.start || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Use an earlier month to include past months you want to reconcile.</small></label>
-        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when you stop paying it. Older months keep their history.</small></label></div>
-      <label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>
-      ${type === 'bill' ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
+        <label class="field">Last month (optional)<input id="tf-end" type="month" value="${esc(TF.end || '')}" placeholder="YYYY-MM" pattern="\\d{4}-\\d{2}"><small>Set this when it stops. Older months keep their history.</small></label></div>
+      ${budget ? '' : `<label class="field">Text on your statement<input id="tf-match" type="text" value="${esc(TF.match || '')}" placeholder="${type === 'income' ? 'ACME PAYROLL' : 'CITY POWER'}" autocomplete="off"><small>Optional. Words from the bank's description, separated by commas. Helps match this to statement lines.</small></label>`}
+      ${type === 'bill' && !budget ? `<label class="checkline"><input id="tf-auto" type="checkbox"${TF.autopay ? ' checked' : ''}> It is paid automatically (shows an Auto tag)</label>` : ''}
     </div>
     <div class="dlg-f">${t ? '<button type="button" class="btn danger sp" id="tf-del">Delete</button>' : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button type="submit" class="btn primary">${t ? 'Save changes' : 'Add ' + word}</button></div></form>`);
-  $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
+  if ($('#tf-freq')) $('#tf-freq').onchange = e => { TF.freq = e.target.value; readTmplForm(true); $('#tf-dyn').innerHTML = tmplFields(TF); };
   if (t) $('#tf-del').onclick = e => {
     const b = e.currentTarget;
     if (b.dataset.sure) { D.templates = D.templates.filter(x => x.id !== t.id); touchMeta(); closeModal(true); render(); toast(`Deleted ${t.name}.`); return; }
@@ -1566,19 +1629,21 @@ function readTmplForm(soft) {
   if (g('tf-end') !== undefined) TF.end = g('tf-end');
   if (g('tf-match') !== undefined) TF.match = g('tf-match').trim();
   if ($('#tf-auto')) TF.autopay = $('#tf-auto').checked;
-  if (!soft) TF.freq = g('tf-freq');
+  if (!soft && g('tf-freq') !== undefined) TF.freq = g('tf-freq');
 }
 function submitTemplate() {
   readTmplForm();
   const amount = parseFloat(TF.amount);
+  if (TF.budget && !TF.name) { toast('Add a name and a monthly budget.'); return; }
   if (!TF.name || isNaN(amount) || amount < 0) { toast('Add a name and an amount.'); return; }
   if ((TF.freq === 'weekly' || TF.freq === 'biweekly') && !TF.anchor) { toast('Pick a date it lands on.'); return; }
   const ok = /^\d{4}-\d{2}$/;
-  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.freq, day: Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
+  const obj = { type: TF.type, name: TF.name, amount: r2(amount), category: TF.type === 'income' ? 'Income' : (TF.category || 'Other'), freq: TF.budget ? 'monthly' : TF.freq, day: TF.budget ? 1 : Math.min(31, Math.max(1, TF.day || 1)), day2: Math.min(31, Math.max(1, TF.day2 || 15)), anchor: TF.anchor, month: TF.month || 1, match: TF.match, autopay: !!TF.autopay, start: ok.test(TF.start || '') ? TF.start : '', end: ok.test(TF.end || '') ? TF.end : '' };
   for (const k of ['anchor', 'start', 'end', 'match']) if (!obj[k]) delete obj[k];
   if (!obj.autopay) delete obj.autopay;
+  if (TF.budget) obj.budget = true;
   let t;
-  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay']) delete t[k]; Object.assign(t, obj); }
+  if (TF.editing) { t = D.templates.find(x => x.id === TF.id); for (const k of ['anchor', 'start', 'end', 'match', 'autopay', 'budget']) delete t[k]; Object.assign(t, obj); }
   else { t = { id: uid('b'), ...obj }; D.templates.push(t); }
   touchMeta();
   const link = TF.linkTxn && txnById(TF.linkTxn);
@@ -1607,6 +1672,25 @@ function submitExtra(type) {
   if (done) { x.done = true; x.doneDate = date > todayStr() ? todayStr() : date; }
   ensureMonth(ym).extras.push(x); touchMonth(ym);
   UI.ym = ym; closeModal(true); render(); toast(`Added ${name}.`);
+}
+
+/* ---------- spending budget entries ---------- */
+function submitSpend(f) {
+  const amount = parseFloat(f.elements.amount.value), date = f.elements.date.value || todayStr(), note = f.elements.note.value.trim();
+  if (isNaN(amount) || amount <= 0) { toast('Enter the amount you spent.'); return; }
+  const ym = ymOf(date);
+  ensureMonth(ym).spends.push({ id: uid('s'), t: f.dataset.tid, date, amount: r2(amount), ...(note ? { note } : {}) });
+  touchMonth(ym);
+  const tid = f.dataset.tid;
+  render();
+  if (ym !== UI.ym) toast(`Added to ${fmtMonth(ym)}.`);
+  if (!matchMedia('(pointer: coarse)').matches) { const next = $(`.spendf[data-tid="${tid}"] input[name=amount]`); if (next) next.focus(); }
+}
+function removeSpend(id) {
+  const mo = D.months[UI.ym], s = mo && mo.spends.find(x => x.id === id);
+  if (!s) return;
+  mo.spends = mo.spends.filter(x => x.id !== id); touchMonth(UI.ym); render();
+  toast(`Removed ${money(s.amount)}.`, { action: 'Undo', fn: () => { ensureMonth(UI.ym).spends.push(s); touchMonth(UI.ym); render(); } });
 }
 
 /* ---------- statement import ---------- */
@@ -1778,7 +1862,8 @@ const ACTIONS = {
     UI.open = null; render(); toast(`Deleted ${it.name}.`);
   },
   'edit-tmpl': el => openTemplateDialog(el.dataset.id),
-  'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type }),
+  'add-tmpl': el => openTemplateDialog(null, { type: el.dataset.type, budget: el.dataset.budget === '1' }),
+  'del-spend': el => removeSpend(el.dataset.id),
   'add-extra': el => openExtraDialog(el.dataset.type),
   'load-sample': () => { if (!isBlank()) return; loadSample(); render(); toast('Example data loaded. Clear it any time from the banner.'); },
   'clear-sample': () => askConfirm({ title: 'Clear the example data?', text: 'This removes the example bills, income, statement lines and check-offs. Anything you added yourself while the examples were showing is removed too.', ok: 'Clear example data', danger: true },
@@ -1897,6 +1982,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'tf') submitTemplate();
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
+  else if (e.target.classList.contains('spendf')) submitSpend(e.target);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 $('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(); });

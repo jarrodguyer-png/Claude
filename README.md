@@ -2,8 +2,8 @@
 
 A small web app for tracking monthly bills and income, ticking things off as they are paid, and checking them against bank statements.
 
-- **Month**: this month's checklist, built from your recurring list. Tick bills as paid and income as received. See what is still to pay, what is overdue, and what is left after bills.
-- **Obligations**: the running list of everything that repeats (monthly, twice a month, every 2 weeks, weekly, quarterly, twice a year, yearly), each with a due day, category and optional statement text for matching.
+- **Month**: this month's checklist, built from your recurring list. Tick bills as paid and income as received. See what is still to pay, what is overdue, and what is left after bills. Spending budgets (like groceries) keep a running total of what you enter against a monthly limit and turn red when you go over.
+- **Obligations**: the running list of everything that repeats (monthly, twice a month, every 2 weeks, weekly, quarterly, twice a year, yearly), each with a due day, category and optional statement text for matching. **Add budget** creates a monthly spending limit instead of a fixed bill.
 - **Statements**: add CSV, OFX/QFX or PDF statements. Bills are matched to statement lines (review, then apply), and everything else is categorised. Past months work too: set a bill's start month earlier.
 - **Spending**: where the money went, by category and by month, plus recurring charges that are not on your list yet.
 

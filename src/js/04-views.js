@@ -40,30 +40,57 @@ function viewMonth() {
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
   const late = S.bills.filter(i => itemStatus(i) === 'late').length;
+  const over = S.budgets.filter(i => i.spent > i.amount + 0.005);
+  const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
     <div class="stats">
-      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(S.bills.length - S.billsDone, 'bill')} left</div></div>
-      <div class="stat"><div class="lbl">Paid so far</div><div class="val">${money(S.billsPaid)}</div><div class="sub">${S.billsDone} of ${S.bills.length} bills</div></div>
+      <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(S.billsLeft)}</div><div class="sub">${plural(openBills, 'bill')} left${S.budgetLeft > 0 ? ` + ${money(S.budgetLeft)} still to spend` : ''}</div></div>
+      <div class="stat"><div class="lbl">Paid so far</div><div class="val">${money(S.billsPaid)}</div><div class="sub">${S.billsDone} of ${S.bills.length} bills${S.budgets.length ? ` + ${money(S.budgetSpent)} spent` : ''}</div></div>
       <div class="stat"><div class="lbl">Income received</div><div class="val">${money(S.incomeGot)}</div><div class="sub">of ${money(S.incomeTotal)} expected</div></div>
-      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">expected income minus all bills</div></div>
+      <div class="stat"><div class="lbl">Left after bills</div><div class="val${S.leftover < 0 ? ' neg' : ''}">${money(S.leftover)}</div><div class="sub">expected income minus bills and budgets</div></div>
     </div>
-    <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid"><i style="width:${pct}%"></i></div>
-      <div class="cap"><span>${pct}% of this month's bills paid</span>${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}</div></div>
+    <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
+      <div class="cap"><span>${pct}% of this month's money paid or spent</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
   </section>`;
-  const bills = items.filter(i => i.type === 'bill'), inc = items.filter(i => i.type === 'income');
+  const bills = items.filter(i => i.type === 'bill' && !i.budget), inc = items.filter(i => i.type === 'income'), buds = items.filter(i => i.budget);
   const shown = UI.hidePaid ? bills.filter(i => !i.done) : bills;
+  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Spending budgets</h2>${RO() ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter each purchase. The bar turns red if you go over.</p>'}</div></div>
+    <ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><h2>Bills</h2><label class="checkline"><input type="checkbox" id="hidepaid" data-chg="hidepaid"${UI.hidePaid ? ' checked' : ''}> Hide paid</label></div>
     ${shown.length ? `<ul class="list">${shown.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">${bills.length ? 'Everything is paid. Nice.' : (RO() ? 'No bills this month.' : 'No bills this month. Recurring bills live under Obligations; add a one-time bill below.')}</p>`}
-    <div class="card-f"><span class="total num">Total ${money(S.billsTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
+    <div class="card-f"><span class="total num">Total ${money(S.fixedTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="bill">+ One-time bill</button>'}</div>
   </section>`;
   const incCard = `<section class="card">
     <div class="card-h"><h2>Income</h2></div>
     ${inc.length ? `<ul class="list">${inc.map(rowHTML).join('')}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span>${RO() ? '' : '<button class="btn sm" data-act="add-extra" data-type="income">+ One-time income</button>'}</div>
   </section>
-  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
-  return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>`;
+  ${RO() ? '' : '<p class="muted" style="font-size:14px">Recurring bills, budgets and paychecks are managed under <button class="btn ghost sm" data-act="tab" data-tab="obligations">Obligations</button></p>'}`;
+  return nav + summary + `<div class="cols"><div class="stack">${budgetCard}${billsCard}</div><div class="stack">${incCard}</div></div>`;
+}
+/* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
+function budgetHTML(b, ym) {
+  const ro = RO(), cur = thisMonth(), tid = b.tmpl.id, k = esc(b.key);
+  const over = b.spent > b.amount + 0.005, pct = b.amount > 0 ? Math.min(100, b.spent / b.amount * 100) : (b.spent > 0 ? 100 : 0);
+  const state = over ? 'over' : pct >= 85 ? 'near' : 'ok', left = r2(b.amount - b.spent);
+  const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
+  const expanded = ro || UI.open === b.key;
+  const defDate = ym === cur ? todayStr() : ym < cur ? `${ym}-${pad(daysIn(ym))}` : `${ym}-01`;
+  const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
+  return `<li class="brow ${state}">
+    <div class="bhead"><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">of ${money(b.amount)}</span></span></div>
+    <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
+    <div class="bsub"><span class="pill ${over ? 'bad' : state === 'near' ? 'warn' : ''}">${over ? `${money(-left)} over budget` : `${money(left)} left`}</span>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button>`}</div>
+    ${ro ? '' : `<form class="spendf" data-tid="${tid}" autocomplete="off">
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount spent on ${esc(b.name)}" required>
+      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
+      <input name="date" class="inp" type="date" value="${defDate}" aria-label="Date">
+      <button class="btn primary sm" type="submit">Add</button></form>`}
+    ${expanded ? `<div class="bentries">${list}${ro ? '' : `<div class="fgrid" style="margin-top:8px"><label class="field">Budget this month<input class="num" type="number" step="0.01" min="0" value="${b.amount}" data-chg="amount" data-key="${k}"><small>Changes this month only. Edit the budget under Obligations to change every month.</small></label></div>
+      <div class="actions" style="margin-top:8px"><button class="btn sm" data-act="edit-tmpl" data-id="${tid}">Edit budget…</button></div>`}</div>` : ''}
+  </li>`;
 }
 function rowHTML(it) {
   const ro = RO(), st = itemStatus(it), open = UI.open === it.key && !ro, verb = it.type === 'income' ? 'received' : 'paid';
@@ -106,7 +133,7 @@ function viewObligations() {
   const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
   const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
   const head = `<div class="pagehead"><div><h1>Monthly obligations</h1><p class="lede">${RO() ? 'Everything that repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list, so add a bill once and it shows up every time it is due.'}</p></div>
-    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button></div>'}</div>`;
+    ${RO() ? '' : '<div class="actions"><button class="btn primary" data-act="add-tmpl" data-type="bill">Add bill</button><button class="btn" data-act="add-tmpl" data-type="income">Add income</button><button class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">Add budget</button></div>'}</div>`;
   if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', RO() ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks. You can set how often each one repeats and which day it is due.', RO() ? '' : `<button class="btn primary" data-act="add-tmpl" data-type="bill">Add your first bill</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
   const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && t.anchor ? +t.anchor.slice(8, 10) : (t.day || 1);
   const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
@@ -135,7 +162,7 @@ function tmplRow(t) {
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}${t.autopay ? '<span class="tag">Auto</span>' : ''}</span>
-    <span class="rmeta"><span>${esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.type === 'bill' && t.category ? `<span aria-hidden="true">·</span><span>${esc(t.category)}</span>` : ''}${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(t.amount)}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }
@@ -160,7 +187,7 @@ function reconcileMonth() {
 }
 function viewReconcile() {
   const ym = reconcileMonth(), ms = txnMonths();
-  const items = itemsFor(ym).filter(i => !i.skip);
+  const items = itemsFor(ym).filter(i => !i.skip && !i.budget);
   const sugg = suggestMatches(ym);
   const suggKeys = new Set(sugg.map(p => p.it.key)), suggTx = new Set(sugg.map(p => p.tx.id));
   const mtx = D.txns.filter(t => ymOf(t.date) === ym);
