@@ -202,17 +202,6 @@ function submitItem(f) {
   closeModal(true); render();
   toast(msg, undo ? { action: 'Undo date', ms: 7000, fn: () => { undo(); render(); } } : {});
 }
-function openAddMenu() {
-  openModal(`${dlgHead('Add to your list')}<div class="dlg-b">
-    <button type="button" class="btn primary" data-act="add-tmpl" data-type="bill">A bill</button>
-    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">Rent, utilities, subscriptions. Pick how often it repeats.</p>
-    <button type="button" class="btn" data-act="add-tmpl" data-type="income">Income</button>
-    <p class="muted" style="font-size:13.5px;margin:-6px 0 4px">A paycheck or regular payment you receive.</p>
-    <button type="button" class="btn" data-act="add-tmpl" data-type="bill" data-budget="1">A variable expense</button>
-    <p class="muted" style="font-size:13.5px;margin:-6px 0 0">Something that changes each month, like groceries or dining out. You enter what you spend.</p>
-  </div><div class="dlg-f"><button type="button" class="btn" data-act="close-modal">Cancel</button></div>`);
-}
-
 /* ---------- add / remove from the Month tab ---------- */
 function openAddBill() {
   openModal(`${dlgHead('Add a bill')}<div class="dlg-b">
@@ -433,9 +422,15 @@ function openSettings() {
   const where = Store.mode === 'cloud' ? 'Your data is saved with this page on your Claude account, so it is the same on every device where you open it. Only you can change it.' : Store.mode === 'browser' ? 'Your data is saved in this browser only. Export a backup now and then, and before clearing browser data.' : 'Saving is unavailable in this browser. Export a backup before you close this page.';
   const cur = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'NZD', 'JPY', 'INR', 'MXN', 'CHF', 'SEK', 'ZAR'];
   const used = new Set([...D.txns.map(t => t.cat), ...D.templates.map(t => t.category)]);
-  openModal(`${dlgHead('Settings and backup')}<div class="dlg-b">
+  const curM = thisMonth(), liveT = D.templates.filter(t => !t.end || t.end >= curM);
+  const billsMo = sum(liveT.filter(t => t.type === 'bill'), monthlyEquiv), incMo = sum(liveT.filter(t => t.type === 'income'), monthlyEquiv);
+  const repeatRows = D.templates.slice().sort((a, b) => (a.type === b.type ? 0 : a.type === 'bill' ? -1 : 1) || a.name.localeCompare(b.name)).map(tmplRow).join('');
+    openModal(`${dlgHead('Settings and backup')}<div class="dlg-b">
     <div><h3 style="font-size:15px">Where your data lives</h3><p class="muted" style="font-size:14px;margin-top:4px">${where}</p></div>
-    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month, Bills and the spending summary, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
+    <div><h3 style="font-size:15px">Share a view-only copy</h3><p class="muted" style="font-size:14px;margin-top:4px">${Store.mode === 'cloud' ? 'Open the Share menu on this page in Claude and invite your spouse by email as a <b>Viewer</b>. They will see Month and the spending summary, kept up to date, and cannot change anything. Invite by email rather than turning on a public link: anyone who can open a public link and sign in to Claude could read your finances.' : 'Sharing needs the published version of this page. In this copy, data stays in this browser.'}</p></div>
+    <details class="more"><summary>Everything that repeats (${D.templates.length})</summary><div class="more-b">
+      <p class="muted" style="font-size:14px">About ${money(billsMo)} a month in bills and variable expenses, and ${money(incMo)} in repeating income. Tap one to change how often it repeats, or to stop it. This includes quarterly and yearly bills and anything you have stopped.</p>
+      ${repeatRows || '<p class="muted">Nothing yet.</p>'}</div></details>
     <label class="field">Currency<select data-chg="currency">${cur.map(c => `<option${D.settings.currency === c ? ' selected' : ''}>${c}</option>`).join('')}</select></label>
     <div><h3 style="font-size:15px">Categories</h3><div class="actions" style="margin-top:8px">${D.cats.map(c => `<span class="pill">${esc(c)}${PROTECTED.has(c) || used.has(c) ? '' : ` <button type="button" class="btn ghost sm" style="min-height:0;padding:0 2px" data-act="cat-del" data-cat="${esc(c)}" aria-label="Remove ${esc(c)}">&times;</button>`}</span>`).join('')}</div>
       <div class="actions" style="margin-top:10px"><input class="inp sm" id="newcat" type="text" placeholder="New category" style="width:180px" autocomplete="off"><button type="button" class="btn sm" data-act="cat-add">Add</button></div></div>

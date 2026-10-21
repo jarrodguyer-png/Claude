@@ -158,6 +158,8 @@ button.rmain:hover { background: var(--surface-2); }
 details.more { border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; }
 details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-size: 14px; color: var(--accent); }
 .more-b { display: grid; gap: 14px; padding: 4px 0 14px; }
+.more-b .orow { padding-inline: 6px; border-radius: 10px; border-top: 0; }
+.more-b .orow + .orow { border-top: 1px solid var(--line-2); border-radius: 0; }
 .bankbar { display: flex; justify-content: space-between; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .rname { font-weight: 600; overflow-wrap: anywhere; }
 .rmeta { font-size: 13px; color: var(--ink-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

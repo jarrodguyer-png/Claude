@@ -13,7 +13,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bills', 'Bills'], ['bank', 'Reconcile']];
+const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bank', 'Reconcile']];
 /* viewers only get the spending summary on that tab, so it says so */
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
@@ -71,8 +71,8 @@ function viewMonth() {
       <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
       <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
       <button class="btn primary sm" type="submit">Add</button></form>`;
-  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Pick one, enter what you spend. The bar turns red if you go over.</p>'}</div></div>
-    ${expForm}<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
+  const budgetCard = (buds.length || !ro) ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro || !buds.length ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Pick one, enter what you spend. The bar turns red if you go over.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="bill" data-budget="1">+ Add expense</button>'}</div>
+    ${buds.length ? `${expForm}<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul>` : '<p class="muted" style="padding:2px 18px 18px">Add things that change each month, like groceries or dining out, and keep a running total of what you spend.</p>'}</section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><div><h2>Bills</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap a bill to change it.</p>'}</div>${ro ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div>
     ${bills.length ? `<ul class="list">${group(bills, true)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
@@ -86,7 +86,7 @@ function viewMonth() {
       <button class="btn primary sm" type="submit">Add income</button>
       <datalist id="incsrc">${incNames.map(n => `<option value="${esc(n)}">`).join('')}</datalist></form>`;
   const incCard = `<section class="card">
-    <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div></div>
+    <div class="card-h"><div><h2>Income</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Log money as it arrives.</p>'}</div>${ro ? '' : '<button class="btn sm" data-act="add-tmpl" data-type="income">+ Repeating income</button>'}</div>
     ${incForm}
     ${inc.length ? `<ul class="list">${group(inc, false)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No income listed for this month.</p>`}
     <div class="card-f"><span class="total num">Expected ${money(S.incomeTotal)}</span><span class="muted num" style="font-size:13px">Received ${money(S.incomeGot)}</span></div>
@@ -157,37 +157,11 @@ function viewPlanner() {
   const list = (bills.length || buds.length) ? `<section class="card"><div class="card-h"><h2>What is left to pay in ${fmtMonth(ym)}</h2></div>
     <ul class="list">${billRows}${budRows ? `<li class="grp">Still to spend</li>${budRows}` : ''}</ul>
     <div class="card-f"><span class="total num">Total ${money(toPay)}</span>${has ? `<span class="num ${over < 0 ? 'neg-t' : 'muted'}" style="font-size:13px">${over < 0 ? 'Short ' + money(-over) : money(over) + ' left over'}</span>` : ''}</div></section>`
-    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan a paycheck.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="bills">Add bills</button>')}</section>`;
+    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan a paycheck.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="month">Add bills</button>')}</section>`;
   return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
 }
 
-/* ----- Bills (everything that repeats) ----- */
-function viewBills() {
-  const cur = thisMonth(), ro = RO();
-  const live = D.templates.filter(t => !t.end || t.end >= cur);
-  const bills = live.filter(t => t.type === 'bill'), inc = live.filter(t => t.type === 'income');
-  const billsMo = sum(bills, monthlyEquiv), incMo = sum(inc, monthlyEquiv);
-  const head = `<div class="pagehead"><div><h1>Bills and income</h1><p class="lede">${ro ? 'What repeats each month.' : 'Everything that repeats. Each month\'s checklist is built from this list.'}</p></div>
-    ${ro ? '' : '<div class="actions"><button class="btn primary" data-act="add-menu">+ Add</button></div>'}</div>`;
-  if (!D.templates.length) return sampleBanner() + head + `<section class="card">${emptyState('Nothing here yet', ro ? 'Nothing has been added yet.' : 'Add rent, utilities, subscriptions, loan payments and paychecks, and choose how often each one repeats.', ro ? '' : `<button class="btn primary" data-act="add-menu">+ Add</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}`)}</section>`;
-  const sortDay = t => (t.freq === 'weekly' || t.freq === 'biweekly') && fieldFor(t, cur, 'anchor') ? +fieldFor(t, cur, 'anchor').slice(8, 10) : (fieldFor(t, cur, 'day') || 1);
-  const rows = list => list.slice().sort((a, b) => sortDay(a) - sortDay(b) || a.name.localeCompare(b.name)).map(tmplRow).join('');
-  const diff = r2(incMo - billsMo);
-  const ended = D.templates.filter(t => t.end && t.end < cur);
-  return sampleBanner() + head + `<div class="stack">
-    <section class="card"><div class="stats three">
-      <div class="stat lead"><div class="lbl">Bills per month</div><div class="val">${money(billsMo)}</div><div class="sub">${plural(bills.length, 'item')}</div></div>
-      <div class="stat"><div class="lbl">Income per month</div><div class="val">${money(incMo)}</div><div class="sub">${plural(inc.length, 'source')}</div></div>
-      <div class="stat"><div class="lbl">Difference</div><div class="val${diff < 0 ? ' neg' : ''}">${money(diff)}</div><div class="sub">${diff < 0 ? 'bills exceed income' : 'income after bills'}</div></div>
-    </div></section>
-    <div class="cols" style="margin-top:0">
-      <section class="card"><div class="card-h"><h2>Bills</h2></div>${bills.length ? rows(bills) : '<p class="muted" style="padding:6px 18px 16px">No recurring bills.</p>'}</section>
-      <div class="stack">
-        <section class="card"><div class="card-h"><h2>Income</h2></div>${inc.length ? rows(inc) : '<p class="muted" style="padding:6px 18px 16px">No recurring income.</p>'}</section>
-        ${ended.length ? `<section class="card"><div class="card-h"><h2>Stopped</h2></div>${rows(ended)}</section>` : ''}
-      </div>
-    </div></div>`;
-}
+/* ----- one repeating item, as listed in Settings ----- */
 function tmplRow(t) {
   const eq = t.freq !== 'monthly' ? `about ${money(monthlyEquiv(t))} / month` : '';
   const tag = RO() ? 'div' : 'button';
@@ -252,7 +226,7 @@ function viewReconcile() {
         act = c.length ? `<select class="inp sm" data-chg="link" data-key="${esc(i.key)}" aria-label="Link a statement line to ${esc(i.name)}" style="max-width:150px"><option value="">Link a line…</option>${c.map(y => `<option value="${y.x.id}">${fmtShort(y.x.date)} · ${esc(y.x.desc.slice(0, 30))} · ${money(Math.abs(y.x.amt))}</option>`).join('')}</select>` : '';
       }
       return `<div class="mrow"><div><div class="nm">${esc(i.name)}</div><div class="muted num" style="font-size:13px">${i.type === 'income' ? 'Expected' : 'Due'} ${fmtShort(i.due)} · ${money(i.planned)}</div></div><div class="mid">${mid}</div><div>${act}</div></div>`;
-    }).join('') : `<p class="muted" style="padding:6px 18px 16px">No bills or income are scheduled for ${fmtMonth(ym)}. Add them under Bills, or give a bill an earlier start month so it shows up here.</p>`}</section>`;
+    }).join('') : `<p class="muted" style="padding:6px 18px 16px">No bills or income are scheduled for ${fmtMonth(ym)}. Add them on the Month tab, or give a bill an earlier start month so it shows up here.</p>`}</section>`;
   const shownU = unplanned.slice().sort((a, b) => a.date.localeCompare(b.date)).slice(0, 30);
   const unCard = `<section class="card"><div class="card-h"><h2>Everything else in ${fmtMonth(ym)}</h2><button class="btn sm" data-act="show-month-txns" data-ym="${ym}">See all ${plural(mtx.length, 'line')}</button></div>
     ${shownU.length ? `<div class="tbl-wrap"><table class="tbl stk"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="r">Amount</th><th></th></tr></thead><tbody>${shownU.map(t => `<tr><td class="num c-date">${fmtShort(t.date)}</td><td class="desc c-desc">${esc(t.desc)}</td>
@@ -349,13 +323,13 @@ function viewSpending() {
   const merchCard = merch.length ? `<section class="card"><div class="card-h"><h2>Biggest merchants</h2></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Merchant</th><th class="r">Visits</th><th class="r">Total</th></tr></thead><tbody>${merch.map(m => `<tr><td class="desc">${esc(titleCase(m.key))}</td><td class="r num">${m.n}</td><td class="r num">${money(m.total)}</td></tr>`).join('')}</tbody></table></div></section>` : '';
   UI.rec = RO() ? [] : detectRecurring();
   const recCard = UI.rec.length ? `<section class="card"><div class="card-h"><h2>Looks like a recurring bill</h2></div>
-    <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not on your bills list yet.</p>
+    <p class="muted" style="padding:0 18px 8px;font-size:14px">These charge about the same amount every month and are not in your bills yet.</p>
     ${UI.rec.map((r, i) => `<div class="rec"><div><div class="rname">${esc(r.name)}</div><div class="rmeta"><span class="num">about ${money(r.amount)}</span><span aria-hidden="true">·</span><span>seen in ${r.months} months</span><span aria-hidden="true">·</span><span>${esc(r.cat)}</span></div></div><button class="btn sm" data-act="add-recurring" data-idx="${i}">Add as bill</button></div>`).join('')}</section>` : '';
   return head + `<div class="stack">${kpis}${catCard}${chartCard}<div class="cols" style="margin-top:0"><div class="stack">${merchCard}</div><div class="stack">${recCard}</div></div></div>`;
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, bills: viewBills, bank: viewBank };
+const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, bank: viewBank };
 const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'planner'));
 function render() {
   const tabs = $('#tabs');
