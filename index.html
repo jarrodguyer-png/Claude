@@ -1312,7 +1312,7 @@ function loadSample() {
 function autoCategoryFor(d, desc, amt) { const keep = D; D = d; const c = autoCategory(desc, amt); D = keep; return c; }
 
 /* ---------- views ---------- */
-const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, sub: 'spending', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
+const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
@@ -1326,7 +1326,9 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bills', 'Bills'], ['bank', 'Bank']];
+const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bills', 'Bills'], ['bank', 'Reconcile']];
+/* viewers only get the spending summary on that tab, so it says so */
+const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
 function chromeHTML() {
   return `<div class="brand">${ICON.mark}<span>Bill Ledger</span></div>
@@ -1510,10 +1512,10 @@ function tmplRow(t) {
 }
 
 /* ----- Bank (statements and spending in one place) ----- */
-const BANK_SUBS = [['spending', 'Spending'], ['reconcile', 'Reconcile'], ['transactions', 'Transactions'], ['files', 'Files']];
+const BANK_SUBS = [['reconcile', 'Match bills'], ['spending', 'Spending'], ['transactions', 'Transactions'], ['files', 'Files']];
 function viewBank() {
   if (RO()) return viewSpending();
-  if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Bank</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
+  if (!D.txns.length) return sampleBanner() + `<div class="pagehead"><div><h1>Reconcile</h1><p class="lede">Add a bank statement to check what was really paid and to see where the rest of the money went.</p></div></div>
     <div class="drop" id="drop"><h3>Add a statement</h3>
       <p>Drop a CSV, OFX/QFX or PDF file here. Most banks offer a CSV under Activity, Statements or Export. Files are read inside this page, and only the date, description and amount of each line are saved.</p>
       <div class="actions" style="justify-content:center"><button class="btn primary" data-act="choose-files">Choose files</button>${isBlank() ? '<button class="btn ghost" data-act="load-sample">Load example data</button>' : ''}</div></div>`;
@@ -1677,7 +1679,7 @@ function render() {
   }
   if (!visibleTabs().some(([id]) => id === UI.tab)) UI.tab = 'month';
   $('#top').innerHTML = chromeHTML();
-  tabs.innerHTML = visibleTabs().map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${label}</button>`).join('');
+  tabs.innerHTML = visibleTabs().map(([id, label]) => `<button class="tab" data-act="tab" data-tab="${id}"${UI.tab === id ? ' aria-current="page"' : ''}>${tabLabel(id, label)}</button>`).join('');
   $('#app').innerHTML = VIEWS[UI.tab]();
   const chip = $('#saveState');
   if (chip) chip.replaceWith(saveChip());
