@@ -24,6 +24,12 @@ const ACTIONS = {
   },
   open: el => { UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render(); },
   'edit-item': el => openItemDialog(el.dataset.key),
+  'del-growth': el => {
+    const i = D.growth.findIndex(e => e.id === el.dataset.id); if (i < 0) return;
+    const [gone] = D.growth.splice(i, 1); touchGrowth(); render();
+    toast(`Removed ${money(gone.amount)}.`, { action: 'Undo', fn: () => { D.growth.push(gone); touchGrowth(); render(); } });
+  },
+  'growth-more': el => { UI.gAll = UI.gAll === el.dataset.kind ? null : el.dataset.kind; render(); },
   'pick-exp': el => { UI.exp = el.dataset.id; render(); const f = $('.spendf input[name=amount]'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } },
   'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
   'plan-clear': () => { setPlan(UI.ym, 0); render(); },
@@ -158,6 +164,20 @@ document.addEventListener('submit', e => {
   else if (e.target.id === 'xf') submitExtra(e.target.dataset.type);
   else if (e.target.classList.contains('spendf')) submitSpend(e.target);
   else if (e.target.classList.contains('incf')) submitIncome(e.target);
+  else if (e.target.classList.contains('growf')) {
+    const f = e.target, a = parseFloat(f.elements.amount.value), out = e.submitter && e.submitter.value === 'out';
+    if (isNaN(a) || a <= 0) { toast('Enter an amount.'); return; }
+    addGrowth(f.dataset.kind, out ? -a : a, f.elements.date.value || todayStr(), f.elements.note.value.trim());
+    render(); toast(`${out ? 'Took out' : 'Added'} ${money(a)}.`);
+  }
+  else if (e.target.classList.contains('growset')) {
+    const kind = e.target.dataset.kind, row = GROWTH.find(x => x[0] === kind), t = parseFloat(e.target.elements.total.value);
+    if (isNaN(t)) { toast('Enter the new total.'); return; }
+    const diff = r2(t - growthFor(kind, row[2]).total);
+    if (!diff) { toast('That is already the total.'); return; }
+    addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`);
+    render(); toast(`${row[1]} is now ${money(t)}.`);
+  }
   else if (e.target.classList.contains('planf')) {
     const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
     if (isNaN(a) || a <= 0) { toast('Enter the amount you were paid.'); return; }

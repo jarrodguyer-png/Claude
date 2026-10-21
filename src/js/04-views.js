@@ -1,5 +1,5 @@
 /* ---------- views ---------- */
-const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
+const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, gAll: null, sub: 'reconcile', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
@@ -13,7 +13,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['planner', 'Planner'], ['bank', 'Reconcile']];
+const TABS = [['month', 'Month'], ['planner', 'Planner'], ['growth', 'Growth'], ['bank', 'Reconcile']];
 /* viewers only get the spending summary on that tab, so it says so */
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
@@ -110,7 +110,7 @@ function budgetHTML(b, ym) {
     <${tag} class="bhead"${ro ? '' : ` data-act="pick-exp" data-id="${tid}" title="Add spending to ${esc(b.name)}"`}><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">${nolimit ? 'spent' : `of ${money(b.amount)}`}</span></span></${tag}>
     <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
     <div class="bsub">${pill}
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}</div>
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}${goal && (b.tmpl.category === 'Savings' || b.tmpl.category === 'Investing') && !ro ? '<span class="muted" style="font-size:12.5px">counts toward Growth</span>' : ''}</div>
     ${expanded ? `<div class="bentries">${list}</div>` : ''}
   </li>`;
 }
@@ -159,6 +159,33 @@ function viewPlanner() {
     <div class="card-f"><span class="total num">Total ${money(toPay)}</span>${has ? `<span class="num ${over < 0 ? 'neg-t' : 'muted'}" style="font-size:13px">${over < 0 ? 'Short ' + money(-over) : money(over) + ' left over'}</span>` : ''}</div></section>`
     : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan a paycheck.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="month">Add bills</button>')}</section>`;
   return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
+}
+
+/* ----- Growth: overall savings and investment totals ----- */
+function growthCard(kind, label, cat) {
+  const g = growthFor(kind, cat), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
+  return `<section class="card"><div class="card-h"><div><h2>${label}</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Total ${money(g.total)}</p></div></div>
+    <form class="growf" data-kind="${kind}" autocomplete="off">
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
+      <input name="note" class="inp" type="text" placeholder="Note (optional)" aria-label="Note">
+      <input name="date" class="inp" type="date" value="${todayStr()}" aria-label="Date">
+      <button class="btn primary sm" type="submit" value="add">Add</button><button class="btn sm" type="submit" value="out">Take out</button></form>
+    <details class="more" style="margin:0 18px 14px"><summary>Set to a new total</summary><form class="growset" data-kind="${kind}" autocomplete="off" style="padding:0 0 12px">
+      <input name="total" class="inp num" type="number" step="0.01" inputmode="decimal" placeholder="${money(g.total)}" aria-label="New total" required><button class="btn sm" type="submit">Update total</button>
+      <small class="muted" style="flex:1 1 100%">Records the difference as an entry, so the list below still adds up. Handy for investments that go up and down.</small></form></details>
+    ${g.monthly ? `<p class="muted" style="padding:0 18px 8px;font-size:13.5px">${money(g.manual)} entered here · ${money(g.monthly)} from your monthly ${label.toLowerCase()} line</p>` : ''}
+    ${rows.length ? `<ul class="entries gentries">${rows.map(e => `<li><span class="num muted">${fmtShort(e.date)}</span><span class="enote">${esc(e.note || '')}</span><span class="num${e.amount < 0 ? ' out-n' : ''}">${money(e.amount, { sign: true })}</span>${e.manual ? `<button class="btn ghost sm" data-act="del-growth" data-id="${e.id}" aria-label="Remove this entry" title="Remove">&times;</button>` : '<span></span>'}</li>`).join('')}</ul>
+      ${g.rows.length > 6 ? `<div class="card-f"><span class="muted">${all ? 'All' : 'Latest 6 of'} ${plural(g.rows.length, 'entry', 'entries')}</span><button class="btn ghost sm" data-act="growth-more" data-kind="${kind}">${all ? 'Show fewer' : 'Show all'}</button></div>` : ''}`
+      : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Add what you have now as a starting balance.</p>'}
+  </section>`;
+}
+function viewGrowth() {
+  const gs = GROWTH.map(([k, l, c]) => ({ k, l, c, g: growthFor(k, c) })), total = sum(gs, x => x.g.total);
+  return sampleBanner() + `<div class="pagehead"><div><h1>Growth</h1><p class="lede">Your savings and investments as overall totals. Money you log on the Savings and Investment lines under Variable expenses is counted here automatically.</p></div></div>
+    <section class="card"><div class="stats three">
+      <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
+      ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
+    <div class="cols" style="margin-top:16px">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l, x.c)}</div>`).join('')}</div>`;
 }
 
 /* ----- one repeating item, as listed in Settings ----- */
@@ -329,8 +356,8 @@ function viewSpending() {
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, bank: viewBank };
-const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'planner'));
+const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, growth: viewGrowth, bank: viewBank };
+const visibleTabs = () => TABS.filter(([id]) => !(RO() && (id === 'planner' || id === 'growth')));
 function render() {
   const tabs = $('#tabs');
   if (Store.mode === 'locked') {

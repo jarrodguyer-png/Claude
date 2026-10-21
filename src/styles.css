@@ -124,7 +124,8 @@ button { cursor: pointer; }
 .stat:first-child { border-left: 0; }
 @media (max-width: 520px) { .stats:not(.three) .stat:nth-child(odd) { border-left: 0; } .stats:not(.three) .stat:nth-child(n+3) { border-top: 1px solid var(--line-2); } }
 .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (max-width: 520px) { .stats.three .stat { padding: 14px 10px 14px 12px; } .stats.three .stat .val { font-size: 19px; } .stats.three .stat .sub { font-size: 12px; } .stats.three .stat .lbl { font-size: 11px; letter-spacing: .04em; } }
+.stats.three .stat .val { overflow-wrap: normal; white-space: nowrap; }
+@media (max-width: 520px) { .stats.three .stat { padding: 14px 8px 14px 10px; } .stats.three .stat .val { font-size: clamp(14px, 4.7vw, 19px); } .stats.three .stat .sub { font-size: 12px; } .stats.three .stat .lbl { font-size: 11px; letter-spacing: .04em; } }
 .stat .lbl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .stat .val { font-family: var(--f-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; overflow-wrap: anywhere; }
 .stat .sub { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
@@ -205,6 +206,15 @@ button.bhead:hover .rname { color: var(--accent); }
 .incf input[name=source] { flex: 2 1 150px; }
 .incf input[name=amount] { flex: 1 1 100px; max-width: 140px; }
 .incf input[name=date] { flex: 0 1 150px; }
+/* growth */
+.growf, .growset { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 12px; }
+.growf .inp, .growset .inp { width: auto; min-width: 0; }
+.growf input[name=amount], .growset input[name=total] { flex: 1 1 110px; max-width: 160px; }
+.growf input[name=note] { flex: 2 1 140px; }
+.growf input[name=date] { flex: 0 1 150px; }
+.gentries { padding: 0 18px 8px; }
+.out-n { color: var(--ink-2); }
+
 /* check planner */
 .planf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 14px; }
 .planf .inp { width: auto; flex: 1 1 160px; max-width: 240px; min-width: 0; }

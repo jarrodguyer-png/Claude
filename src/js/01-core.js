@@ -37,6 +37,13 @@ function money(n, o = {}) {
   const v = Math.abs(n) < 0.005 ? 0 : n;
   return o.sign && v > 0 ? '+' + _fmt.format(v) : _fmt.format(v);
 }
+/* whole amounts, for headline totals where cents are noise */
+let _fmtW = null, _fmtWCur = '';
+function moneyWhole(n) {
+  const cur = D.settings.currency || 'USD';
+  if (_fmtWCur !== cur) { _fmtW = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 0 }); _fmtWCur = cur; }
+  return _fmtW.format(Math.abs(n) < 0.5 ? 0 : n);
+}
 function moneyShort(n) {
   const cur = D.settings.currency || 'USD';
   const sym = (new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 0 }).formatToParts(0).find(p => p.type === 'currency') || { value: '$' }).value;
@@ -56,12 +63,14 @@ function moneyShort(n) {
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
+   growth    : [{id,kind:'savings'|'investing',date,amount,note}] deposits (+) and withdrawals (-) behind the Growth tab; the monthly
+               amounts logged on goal lines (savings / investing) under Variable expenses count toward the same totals
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
 const DEFAULT_CATS = ['Housing', 'Utilities', 'Groceries', 'Dining', 'Fuel', 'Transport', 'Insurance', 'Health', 'Subscriptions', 'Shopping',
   'Entertainment', 'Travel', 'Education', 'Debt', 'Fees', 'Personal care', 'Pets', 'Giving', 'Savings', 'Investing', 'Income', 'Transfer', 'Other'];
 const NON_SPEND = new Set(['Income', 'Transfer']);
-const emptyData = () => ({ v: 1, settings: { currency: 'USD' }, templates: [], months: {}, txns: [], imports: [], rules: {}, cats: [...DEFAULT_CATS], sample: false });
+const emptyData = () => ({ v: 1, settings: { currency: 'USD' }, templates: [], months: {}, txns: [], imports: [], rules: {}, cats: [...DEFAULT_CATS], growth: [], sample: false });
 let D = emptyData();
 
 const FREQ = { monthly: 'Monthly', twice: 'Twice a month', biweekly: 'Every 2 weeks', weekly: 'Every week', quarterly: 'Every 3 months', semiannual: 'Every 6 months', yearly: 'Once a year' };
@@ -86,17 +95,19 @@ const spendCats = () => D.cats.filter(c => !NON_SPEND.has(c));
 const dirty = new Set();
 const touchMeta = () => { dirty.add('meta'); Store.schedule(); };
 const touchMonth = ym => { dirty.add('m_' + ym); Store.schedule(); };
+const touchGrowth = () => { dirty.add('growth'); Store.schedule(); };
 const touchTxns = ym => { dirty.add('t_' + ym); Store.schedule(); };
 const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length || mo.plan);
 
 function buildDoc(key) {
   if (key === 'meta') return { v: 1, settings: D.settings, templates: D.templates, rules: D.rules, cats: D.cats, imports: D.imports, sample: D.sample };
+  if (key === 'growth') return D.growth.length ? { entries: D.growth } : null;
   if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [], ...(mo.plan ? { plan: mo.plan } : {}) } : null; }
   if (key.startsWith('t_')) { const ym = key.slice(2); const list = D.txns.filter(t => ymOf(t.date) === ym); return list.length ? { list } : null; }
   return null;
 }
 function allDocKeys() {
-  const keys = new Set(['meta']);
+  const keys = new Set(['meta', 'growth']);
   Object.keys(D.months).forEach(ym => keys.add('m_' + ym));
   D.txns.forEach(t => keys.add('t_' + ymOf(t.date)));
   return keys;
@@ -116,6 +127,7 @@ function dataFromDocs(docs) {
     if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [], ...(v.plan ? { plan: v.plan } : {}) };
     else if (k.startsWith('t_')) d.txns.push(...(v.list || []));
   }
+  d.growth = (docs.growth && docs.growth.entries) || [];
   d.txns.sort((a, b) => a.date.localeCompare(b.date));
   for (const c of ['Income', 'Transfer', 'Other']) if (!d.cats.includes(c)) d.cats.push(c);
   return d;

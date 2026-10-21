@@ -98,6 +98,21 @@ function setDueDate(ym, it, newDate, onlyThisMonth) {
   if (mo && mo.entries[nk] && mo.entries[nk].due) { delete mo.entries[nk].due; touchMonth(ym); }
   return { undo, day, key: nk };
 }
+/* ----- growth: overall savings and investment totals ----- */
+const GROWTH = [['savings', 'Savings', 'Savings'], ['investing', 'Investments', 'Investing']]; // [kind, label, category of the matching goal line]
+/* money put aside each month on goal lines (Variable expenses) whose category is the kind's */
+function growthContribs(cat) {
+  const ts = new Map(D.templates.filter(t => t.budget && t.goal && t.category === cat).map(t => [t.id, t])), out = [];
+  for (const [ym, mo] of Object.entries(D.months)) for (const s of mo.spends || []) if (ts.has(s.t)) out.push({ date: s.date, amount: s.amount, note: 'From ' + ts.get(s.t).name + (s.note ? ': ' + s.note : ''), manual: false });
+  return out;
+}
+function growthFor(kind, cat) {
+  const mine = D.growth.filter(e => e.kind === kind).map(e => ({ ...e, manual: true })), contribs = growthContribs(cat);
+  const manual = sum(mine, e => e.amount), monthly = sum(contribs, e => e.amount);
+  return { manual, monthly, total: r2(manual + monthly), rows: [...mine, ...contribs].sort((a, b) => b.date.localeCompare(a.date)) };
+}
+function addGrowth(kind, amount, date, note) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}) }); touchGrowth(); }
+
 /* the paycheck typed into the Planner for a month */
 function setPlan(ym, amount, source) {
   const mo = ensureMonth(ym);
@@ -420,6 +435,7 @@ function loadSample() {
     list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
   });
   d.months[cur].plan = { amount: 2150, source: 'Paycheck' };
+  d.growth = [{ id: 'g1', kind: 'savings', date: start + '-02', amount: 6200, note: 'Starting balance' }, { id: 'g2', kind: 'savings', date: addMonths(start, 1) + '-15', amount: 400, note: 'Birthday money' }, { id: 'g3', kind: 'investing', date: start + '-02', amount: 14500, note: 'Starting balance' }, { id: 'g4', kind: 'investing', date: cur + '-01', amount: 820, note: 'Updated to match the app' }];
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);
