@@ -1,5 +1,5 @@
 /* ---------- views ---------- */
-const UI = { tab: 'month', ym: thisMonth(), open: null, sub: 'spending', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
+const UI = { tab: 'month', ym: thisMonth(), open: null, exp: null, sub: 'spending', rm: null, range: '6', q: '', fm: 'all', fc: 'all', fu: false, txLimit: 100, confirm: null, rec: [] };
 const txnById = id => D.txns.find(t => t.id === id);
 const RO = () => Store.readonly;
 /* the date a quick entry defaults to: today in the current month, otherwise the month's last (past) or first (future) day */
@@ -47,7 +47,7 @@ function viewMonth() {
   }
   const pct = S.billsTotal ? Math.round(S.billsPaid / S.billsTotal * 100) : 0;
   const late = S.bills.filter(i => itemStatus(i) === 'late').length;
-  const over = S.budgets.filter(i => i.spent > i.amount + 0.005);
+  const over = S.budgets.filter(i => i.amount > 0 && !i.tmpl.goal && i.spent > i.amount + 0.005);
   const openBills = S.bills.length - S.billsDone;
   const summary = `<section class="card" aria-label="Month summary">
     <div class="stats">
@@ -62,8 +62,15 @@ function viewMonth() {
     const open = list.filter(i => !i.done && !i.skip), done = list.filter(i => i.done || i.skip);
     return open.map(rowHTML).join('') + (allDone && !open.length && done.length ? '<li class="alldone">Everything is paid. Nice.</li>' : '') + (done.length ? `<li class="grp">Done · ${done.length}</li>${done.map(rowHTML).join('')}` : '');
   };
-  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Spending budgets</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Enter what you spend. The bar turns red if you go over.</p>'}</div></div>
-    <ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
+  const expSel = buds.some(x => x.tmpl.id === UI.exp) ? UI.exp : (buds[0] && buds[0].tmpl.id);
+  const expForm = ro || !buds.length ? '' : `<form class="spendf" autocomplete="off">
+      ${buds.length > 1 ? `<select name="exp" class="inp" data-chg="exp" aria-label="Which expense">${buds.map(x => `<option value="${x.tmpl.id}"${x.tmpl.id === expSel ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<input type="hidden" name="exp" value="${expSel}">`}
+      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount" required>
+      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
+      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
+      <button class="btn primary sm" type="submit">Add</button></form>`;
+  const budgetCard = buds.length ? `<section class="card"><div class="card-h"><div><h2>Variable expenses</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Pick one, enter what you spend. The bar turns red if you go over.</p>'}</div></div>
+    ${expForm}<ul class="list">${buds.map(b => budgetHTML(b, ym)).join('')}</ul></section>` : '';
   const billsCard = `<section class="card">
     <div class="card-h"><div><h2>Bills</h2>${ro ? '' : '<p class="muted" style="font-size:13.5px;margin-top:2px">Tap a bill to change it.</p>'}</div>${ro ? '' : '<button class="btn primary sm" data-act="add-bill">+ Add bill</button>'}</div>
     ${bills.length ? `<ul class="list">${group(bills, true)}</ul>` : `<p class="muted" style="padding:6px 18px 16px">No bills this month.</p>`}
@@ -85,24 +92,23 @@ function viewMonth() {
   // bills first, then income, with the spending budgets in their own section at the bottom
   return nav + summary + `<div class="cols"><div class="stack">${billsCard}</div><div class="stack">${incCard}</div></div>${budgetCard ? `<div style="margin-top:16px">${budgetCard}</div>` : ''}`;
 }
-/* a spending budget: a monthly limit, a running total of what was spent, and red when it goes over */
+/* a variable expense: a monthly amount, a running total of what was spent, and red when it goes over.
+   No limit set just tracks; a goal (savings, investing) shows green when reached and never red. */
 function budgetHTML(b, ym) {
-  const ro = RO(), tid = b.tmpl.id, k = esc(b.key);
-  const over = b.spent > b.amount + 0.005, pct = b.amount > 0 ? Math.min(100, b.spent / b.amount * 100) : (b.spent > 0 ? 100 : 0);
-  const state = over ? 'over' : pct >= 85 ? 'near' : 'ok', left = r2(b.amount - b.spent);
+  const ro = RO(), tid = b.tmpl.id, goal = !!b.tmpl.goal, nolimit = !(b.amount > 0), k = esc(b.key);
+  const over = !goal && !nolimit && b.spent > b.amount + 0.005, reached = goal && !nolimit && b.spent >= b.amount - 0.005;
+  const pct = nolimit ? 0 : Math.min(100, b.spent / b.amount * 100), left = r2(b.amount - b.spent);
+  const state = nolimit ? 'none' : over ? 'over' : reached ? 'done' : (!goal && pct >= 85) ? 'near' : 'ok';
+  const pill = nolimit ? '<span class="pill">No limit set</span>' : over ? `<span class="pill bad">${money(-left)} over budget</span>` : reached ? '<span class="pill good">Goal reached</span>' : goal ? `<span class="pill">${money(left)} to go</span>` : `<span class="pill ${state === 'near' ? 'warn' : ''}">${money(left)} left</span>`;
   const ents = spendsFor(ym, tid).slice().sort((x, y) => y.date.localeCompare(x.date));
   const expanded = ro || UI.open === b.key;
   const list = ents.length ? `<ul class="entries">${(ro ? ents.slice(0, 12) : ents).map(s => `<li><span class="num muted">${fmtShort(s.date)}</span><span class="enote">${esc(s.note || '')}</span><span class="num">${money(s.amount)}</span>${ro ? '<span></span>' : `<button class="btn ghost sm" data-act="del-spend" data-id="${s.id}" aria-label="Remove ${money(s.amount)} on ${fmtShort(s.date)}" title="Remove">&times;</button>`}</li>`).join('')}</ul>` : '<p class="muted" style="font-size:14px">Nothing entered yet.</p>';
+  const tag = ro ? 'div' : 'button';
   return `<li class="brow ${state}">
-    <div class="bhead"><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">of ${money(b.amount)}</span></span></div>
+    <${tag} class="bhead"${ro ? '' : ` data-act="pick-exp" data-id="${tid}" title="Add spending to ${esc(b.name)}"`}><span class="rname">${esc(b.name)}</span><span class="bnum num">${money(b.spent)} <span class="muted">${nolimit ? 'spent' : `of ${money(b.amount)}`}</span></span></${tag}>
     <div class="bbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(b.name)} spent"><i style="width:${pct}%"></i></div>
-    <div class="bsub"><span class="pill ${over ? 'bad' : state === 'near' ? 'warn' : ''}">${over ? `${money(-left)} over budget` : `${money(left)} left`}</span>
-      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change budget</button>`}</div>
-    ${ro ? '' : `<form class="spendf" data-tid="${tid}" autocomplete="off">
-      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount" aria-label="Amount spent on ${esc(b.name)}" required>
-      <input name="note" class="inp" type="text" placeholder="What for? (optional)" aria-label="Note">
-      <input name="date" class="inp" type="date" value="${entryDate(ym)}" aria-label="Date">
-      <button class="btn primary sm" type="submit">Add</button></form>`}
+    <div class="bsub">${pill}
+      ${ro ? `<span class="muted">${plural(ents.length, 'entry', 'entries')}</span>` : `<button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="open" data-key="${k}" aria-expanded="${expanded}">${expanded ? 'Hide' : 'Show'} ${plural(ents.length, 'entry', 'entries')}</button><button class="btn ghost sm" style="min-height:0;padding:2px 6px" data-act="edit-tmpl" data-id="${tid}">Change</button>`}</div>
     ${expanded ? `<div class="bentries">${list}</div>` : ''}
   </li>`;
 }
@@ -185,7 +191,7 @@ function tmplRow(t) {
   const tag = RO() ? 'div' : 'button';
   return `<${tag} class="orow"${RO() ? '' : ` data-act="edit-tmpl" data-id="${t.id}"`}>
     <span><span class="rname">${esc(t.name)}</span>
-    <span class="rmeta"><span>${t.budget ? 'Monthly spending budget' : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
+    <span class="rmeta"><span>${t.budget ? (t.goal ? 'Monthly, put aside' : 'Monthly variable expense') : esc(freqText(t))}</span>${t.end ? `<span aria-hidden="true">·</span><span>last month ${fmtMonth(t.end)}</span>` : ''}</span></span>
     <span><span class="ramt">${money(amountFor(t, thisMonth()))}</span>${eq ? `<span class="eq" style="display:block">${eq}</span>` : ''}</span>
   </${tag}>`;
 }

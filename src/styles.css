@@ -172,17 +172,23 @@ details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-
 
 /* spending budgets */
 .brow { padding: 14px 18px 16px; border-top: 1px solid var(--line-2); display: grid; gap: 10px; }
-.bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; }
+.bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; background: none; border: 0; padding: 0; width: 100%; text-align: left; color: inherit; }
+button.bhead { cursor: pointer; }
+button.bhead:hover .rname { color: var(--accent); }
 .bnum { font-size: 16px; font-weight: 500; }
 .bbar { height: 12px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line-2); overflow: hidden; }
 .bbar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; min-width: 0; }
 .brow.near .bbar i { background: var(--warn-fill); }
 .brow.over .bbar i { background: var(--bad); }
+.brow.done .bbar i { background: var(--good); }
+.brow.none .bbar { display: none; }
 .brow.over .bnum, .brow.over .bnum .muted { color: var(--bad); }
 .bsub { display: flex; gap: 8px 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
-.spendf { display: flex; flex-wrap: wrap; gap: 8px; }
+.spendf { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 12px; }
+.spendf select[name=exp] { flex: 1 1 100%; width: 100%; font-weight: 600; }
 .spendf .inp { width: auto; min-width: 0; }
 .spendf input[name=amount] { flex: 1 1 110px; max-width: 150px; }
+.spendf .inp { width: auto; }
 .spendf input[name=note] { flex: 2 1 150px; }
 .spendf input[name=date] { flex: 0 1 150px; }
 .entries { list-style: none; margin: 0; padding: 0; display: grid; }

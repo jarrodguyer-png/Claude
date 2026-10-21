@@ -51,14 +51,15 @@ function moneyShort(n) {
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
                  spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
                  plan: {amount, source?} }                         (the paycheck typed into the Planner tab)
-   a template with budget:true is a monthly spending limit rather than a fixed payment
+   a template with budget:true is a variable expense (a monthly amount you spend against); goal:true marks money put aside, where
+   reaching the amount is good and never turns red; an amount of 0 means no limit set
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
 const DEFAULT_CATS = ['Housing', 'Utilities', 'Groceries', 'Dining', 'Fuel', 'Transport', 'Insurance', 'Health', 'Subscriptions', 'Shopping',
-  'Entertainment', 'Travel', 'Education', 'Debt', 'Fees', 'Personal care', 'Pets', 'Giving', 'Income', 'Transfer', 'Other'];
+  'Entertainment', 'Travel', 'Education', 'Debt', 'Fees', 'Personal care', 'Pets', 'Giving', 'Savings', 'Investing', 'Income', 'Transfer', 'Other'];
 const NON_SPEND = new Set(['Income', 'Transfer']);
 const emptyData = () => ({ v: 1, settings: { currency: 'USD' }, templates: [], months: {}, txns: [], imports: [], rules: {}, cats: [...DEFAULT_CATS], sample: false });
 let D = emptyData();
