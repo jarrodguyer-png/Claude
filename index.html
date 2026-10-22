@@ -2231,8 +2231,12 @@ function monthlyReport(ym) {
   ];
   if (spent.length) sections.push({ title: 'Variable expenses', total: money(spentSum), empty: '', rows: spent.map(i => ({ d: '', n: i.name, a: money(i.spent) })) });
 
+  // savings and investment balances as they stood then (view-only copies never see these)
+  const showBal = !RO(), asOf = ym < cur ? lastDay : today;
+  const bal = kind => sum(D.growth.filter(e => e.kind === kind && e.date <= asOf), e => e.amount);
+
   // pick a row height that fits one sheet; past that, carry on to a second sheet
-  const M = 44, CW = 595.28 - 2 * M, top = 218, bottom = 841.89 - 56;
+  const M = 44, CW = 595.28 - 2 * M, top = showBal ? 238 : 218, bottom = 841.89 - 56;
   const nRows = sum(sections, s => Math.max(1, s.rows.length));
   const RH = Math.max(12.5, Math.min(15.5, (bottom - top - sections.length * 38) / nRows)), FS = RH >= 14 ? 9.5 : 8.5;
 
@@ -2251,6 +2255,11 @@ function monthlyReport(ym) {
     pdf.text(x + 12, by + 18, label, { size: 7.5, bold: true, color: MUTED, spacing: 0.8 });
     pdf.text(x + 12, by + 41, value, { size: 17, bold: true, color: INK });
     pdf.text(x + 12, by + 55, pdfFit(sub, 7.5, false, bw - 24), { size: 7.5, color: MUTED });
+  });
+  if (showBal) [['Savings balance', bal('savings')], ['Investments balance', bal('investing')]].forEach(([label, v], i) => {
+    const x = M + 12 + i * (bw + gap);
+    pdf.text(x, by + 62 + 20, label, { size: 9.5, color: MUTED });
+    pdf.text(x + pdfWidth(label, 9.5, false) + 8, by + 62 + 20, money(v), { size: 9.5, bold: true, color: INK });
   });
 
   let y = top;
