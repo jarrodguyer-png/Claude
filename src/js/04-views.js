@@ -16,7 +16,7 @@ const ICON = {
   mark: '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect x="1.5" y="1.5" width="27" height="27" rx="8" fill="var(--accent)"/><path d="M8 11h14M8 15h14M8 19h7" stroke="var(--accent-ink)" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M17.5 20.2l2.6 2.4 4.6-5.4" fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   link: '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.4l2.4 2.3 4.6-5.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-const TABS = [['month', 'Month'], ['planner', 'Planner'], ['income', 'Income'], ['bank', 'Reconcile']];
+const TABS = [['month', 'Month'], ['income', 'Income'], ['bank', 'Reconcile']];
 /* viewers only get the spending summary on that tab, so it says so */
 const tabLabel = (id, label) => (id === 'bank' && RO() ? 'Spending' : label);
 
@@ -61,6 +61,7 @@ function viewMonth() {
     </div>
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
+    <div class="card-f"><span class="muted">One page to share: income, bills paid, still to pay</span><button class="btn sm" data-act="share-pdf">Monthly update PDF</button></div>
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), buds = items.filter(i => i.budget);
   // paid bills leave the list; a quiet line at the bottom brings them back (view-only copies show them, since seeing what is paid is the point)
@@ -140,39 +141,6 @@ function rowHTML(it) {
   </li>`;
 }
 
-/* ----- Planner: type in a balance (a paycheck, or what is in the account) and see what is left to pay and what is left over ----- */
-function planRow(name, sub, cls, amount, bal) {
-  return `<li class="prow ${cls}"><span class="ptxt"><span class="rname">${esc(name)}</span><span class="rmeta"><span class="due">${esc(sub)}</span></span></span>
-    <span class="pright"><span class="ramt">${money(amount)}</span>${bal === null ? '' : `<span class="pbal num${bal < 0 ? ' neg' : ''}">${bal < 0 ? 'short ' + money(-bal) : money(bal) + ' left'}</span>`}</span></li>`;
-}
-function viewPlanner() {
-  const ym = UI.ym, items = itemsFor(ym), plan = (D.months[ym] && D.months[ym].plan) || null;
-  const pay = plan && plan.amount > 0 ? plan.amount : 0, has = pay > 0;
-  const bills = items.filter(i => i.type === 'bill' && !i.budget && !i.done && !i.skip);
-  const buds = items.filter(i => i.budget).map(b => ({ b, left: Math.max(0, r2(b.amount - b.spent)) })).filter(x => x.left > 0);
-  const billsTotal = sum(bills, i => i.amount), budTotal = sum(buds, x => x.left), toPay = r2(billsTotal + budTotal), over = r2(pay - toPay);
-  const expected = items.filter(i => i.type === 'income' && i.rec && !i.done && !i.skip).slice(0, 3);
-  const chips = expected.length ? `<div class="chips"><span class="muted">Expecting</span>${expected.map(i => `<button type="button" class="chip" data-act="plan-use" data-amt="${i.amount}" data-name="${esc(i.name)}">${esc(i.name)} ${money(i.amount)}</button>`).join('')}</div>` : '';
-  let bal = pay;
-  const billRows = bills.map(i => { bal = r2(bal - i.amount); return planRow(i.name, dueText(i), itemStatus(i), i.amount, has ? bal : null); }).join('');
-  const budRows = buds.map(x => { bal = r2(bal - x.left); return planRow(x.b.name, 'left to spend this month', 'budget', x.left, has ? bal : null); }).join('');
-  const form = `<section class="card"><div class="card-h"><div><h2>Your balance</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Enter the money you have to work with, such as a paycheck or what is in your account. Bills still unpaid this month come out of it in due-date order.</p></div></div>
-    <form class="planf" autocomplete="off">
-      <input name="amount" class="inp num" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Balance" aria-label="Balance" value="${has ? pay : ''}" required>
-      <button class="btn primary" type="submit">${has ? 'Update' : 'Plan it'}</button>
-      ${has ? '<button type="button" class="btn" data-act="plan-log" title="Record this amount as income received this month">Log as income</button><button type="button" class="btn ghost" data-act="plan-clear">Clear</button>' : ''}
-    </form>${chips}</section>`;
-  const stats = `<section class="card"><div class="stats three">
-    <div class="stat"><div class="lbl">Balance</div><div class="val">${has ? money(pay) : '—'}</div><div class="sub">${has ? 'entered above' : 'enter it above'}</div></div>
-    <div class="stat lead"><div class="lbl">Still to pay</div><div class="val">${money(toPay)}</div><div class="sub">${plural(bills.length, 'bill')}${budTotal > 0 ? ` + ${money(budTotal)} to spend` : ''}</div></div>
-    <div class="stat"><div class="lbl">Left over</div><div class="val${has && over < 0 ? ' neg' : ''}">${has ? money(over) : '—'}</div><div class="sub">${has ? (over < 0 ? 'short after everything below' : 'after everything below') : 'after you enter a balance'}</div></div></div></section>`;
-  const list = (bills.length || buds.length) ? `<section class="card"><div class="card-h"><h2>What is left to pay in ${fmtMonth(ym)}</h2></div>
-    <ul class="list">${billRows}${budRows ? `<li class="grp">Still to spend</li>${budRows}` : ''}</ul>
-    <div class="card-f"><span class="total num">Total ${money(toPay)}</span>${has ? `<span class="num ${over < 0 ? 'neg-t' : 'muted'}" style="font-size:13px">${over < 0 ? 'Short ' + money(-over) : money(over) + ' left over'}</span>` : ''}</div></section>`
-    : `<section class="card">${emptyState('Everything for ' + fmtMonth(ym) + ' is paid', D.templates.length ? 'Nothing is left to pay this month. Nice.' : 'Add your bills first, then come back to plan.', D.templates.length ? '' : '<button class="btn primary" data-act="tab" data-tab="month">Add bills</button>')}</section>`;
-  return sampleBanner() + monthNav(ym) + `<div class="stack">${form}${stats}${list}</div>`;
-}
-
 /* ----- Savings and investments: overall totals, shown on the Income tab ----- */
 function growthCard(kind, label) {
   const g = growthFor(kind), all = UI.gAll === kind, rows = all ? g.rows : g.rows.slice(0, 6);
@@ -190,28 +158,15 @@ function growthCard(kind, label) {
       : '<p class="muted" style="padding:2px 18px 18px">Nothing yet. Use "Set to a new total" to enter what you have now.</p>'}
   </section>`;
 }
-function goalCard() {
-  const ym = UI.ym, P = growthPlan(ym), pct = P.goal > 0 ? Math.min(100, P.done / P.goal * 100) : 0, reached = P.income > 0 && P.need <= 0;
-  const body = P.income <= 0
-    ? `<p class="muted">No income has been logged for ${fmtMonth(ym)} yet. Log it on the Month tab and a suggestion shows up here.</p>`
-    : `<div class="bbar${reached ? ' good' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="Put aside toward the goal"><i style="width:${pct}%"></i></div>
-       <p><b class="num">${money(P.done)}</b> <span class="muted">of ${money(P.goal)} put aside, from ${money(P.income)} of income received</span></p>
-       ${reached ? '<p><span class="pill good">Goal reached this month</span></p>' : `<div class="suggest"><div>Suggested: put <b class="num">${money(P.need)}</b> more aside</div>
-         <div class="actions">${P.parts.filter(p => p.suggest > 0).map(p => `<button class="btn primary sm" data-act="goal-put" data-kind="${p.kind}" data-amt="${p.suggest}">Put ${money(p.suggest)} in ${esc(p.label)}</button>`).join('')}</div></div>`}`;
-  return `<section class="card"><div class="card-h"><div><h2>Put ${P.pct}% of income aside</h2><p class="muted" style="font-size:13.5px;margin-top:2px">Savings and investments together, from income you have received.</p></div></div>
-    <div class="goalbody">${body}
-      <label class="goalpct">Goal <input class="inp num" type="number" min="1" max="100" step="1" value="${P.pct}" data-chg="gpct" aria-label="Goal as a percent of income"> % of income</label></div></section>`;
-}
 function viewIncome() {
   const ym = UI.ym, items = itemsFor(ym), nav = sampleBanner() + monthNav(ym);
   if (RO()) return nav + `<div class="stack">${incomeCard(ym, items)}</div>`; // viewers see the income list, not savings
   const gs = GROWTH.map(([k, l]) => ({ k, l, g: growthFor(k) })), total = sum(gs, x => x.g.total);
-  return nav + `<div class="stack">
-    <div class="cols"><div class="stack">${incomeCard(ym, items)}</div><div class="stack">${goalCard()}</div></div>
-    <section class="card"><div class="card-h"><h2>Savings and investments</h2></div><div class="stats three">
+  return nav + `<div class="cols"><div class="stack">${incomeCard(ym, items)}</div>
+    <div class="stack"><section class="card"><div class="card-h"><h2>Savings and investments</h2></div><div class="stats three">
       <div class="stat lead"><div class="lbl">Together</div><div class="val${total < 0 ? ' neg' : ''}">${moneyWhole(total)}</div><div class="sub">saved and invested</div></div>
       ${gs.map(x => `<div class="stat"><div class="lbl">${x.l}</div><div class="val${x.g.total < 0 ? ' neg' : ''}">${moneyWhole(x.g.total)}</div><div class="sub">${plural(x.g.rows.length, 'entry', 'entries')}</div></div>`).join('')}</div></section>
-    <div class="cols">${gs.map(x => `<div class="stack">${growthCard(x.k, x.l)}</div>`).join('')}</div></div>`;
+      ${gs.map(x => growthCard(x.k, x.l)).join('')}</div></div>`;
 }
 
 /* ----- one repeating item, as listed in Settings ----- */
@@ -384,8 +339,8 @@ function viewSpending() {
 }
 
 /* ----- shell ----- */
-const VIEWS = { month: () => sampleBanner() + viewMonth(), planner: viewPlanner, income: viewIncome, bank: viewBank };
-const visibleTabs = () => TABS.filter(([id]) => !(RO() && id === 'planner'));
+const VIEWS = { month: () => sampleBanner() + viewMonth(), income: viewIncome, bank: viewBank };
+const visibleTabs = () => TABS;
 function render() {
   const tabs = $('#tabs');
   if (Store.mode === 'locked') {

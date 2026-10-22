@@ -3,8 +3,8 @@
 A small web app for tracking monthly bills and income, ticking things off as they are paid, and checking them against bank statements.
 
 - **Month**: this month's checklist, built from your recurring list. Bills come first, with the variable expenses beside them (under them on a phone). Each card has its own add button (a bill, a variable expense); everything that repeats, including quarterly and yearly bills and stopped ones, is listed under Settings. Tick a bill off and it leaves the list; a quiet line at the bottom, "Show paid bills", brings them back (view-only copies show them by default). Tap any bill row to change its amount or due date in one sheet, either for this and the following months or for this month only. Earlier months keep what they had. Variable expenses (groceries, dining out, clothes and so on) are rows like the bills: tap the + (or the row) to log what you spent, and the amount turns red when you go over the monthly limit. A line with no limit just tracks.
-- **Income**: the month's income list. Log income in one line (source, amount, date); a source that matches an expected paycheck ticks it off. Tap a row to change it, and use *+ Repeating income* for a regular paycheck. Below it, overall savings and investment totals: add money, take money out, or set a new total (handy for investments that move). A goal card suggests how much of the income you have received this month should go into savings and investments (10% by default, changeable), shows what you have put aside so far, and has a button to record the suggested amount in each. View-only viewers see the income list but not the savings and investments.
-- **Planner**: type in a balance (a paycheck, or what is in your account) and see the unpaid bills for the month in due-date order, what is left of it after each one, what you still have to pay, and what is left over. **Log as income** is there if the balance is a paycheck you want recorded (it ticks off a matching expected paycheck). Hidden from view-only viewers.
+- **Monthly update PDF**: the button on the Month summary makes a one-page PDF for the month on screen: income received, bills paid, what is still to pay (with the variable expenses that are left to spend) and how each variable expense stands. It is built inside the page. In Claude it asks you to save the file, and in a normal browser it downloads. View-only copies can make it too.
+- **Income**: the month's income list. Log income in one line (source, amount, date); a source that matches an expected paycheck ticks it off. Tap a row to change it, and use *+ Repeating income* for a regular paycheck. Beside it (below it, on a phone), overall savings and investment totals: add money, take money out, or set a new total (handy for investments that move). View-only viewers see the income list but not the savings and investments.
 - **Reconcile**: add CSV, OFX/QFX or PDF statements. Match bills checks the month's bills against statement lines (review, then apply), Spending shows where the money went by category and month, Transactions lists every line and the files you imported.
 
 No framework, no build dependencies beyond Python 3, and nothing is sent anywhere. Statement files are read inside the page and only the date, description and amount of each line are saved.
@@ -49,8 +49,9 @@ src/body.html        page markup
 src/js/01-core.js    helpers, data model, storage (browser or Claude storage)
 src/js/02-parse.js   CSV, OFX and PDF parsing
 src/js/03-logic.js   recurrence, matching, categories, spending maths, example data
-src/js/04-views.js   the four tabs
+src/js/04-views.js   the three tabs
 src/js/05-dialogs.js dialogs, import flow, settings and backup
+src/js/05-report.js  the one-page monthly update PDF
 src/js/06-main.js    events and start-up
 ```
 

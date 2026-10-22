@@ -104,37 +104,8 @@ function growthFor(kind) {
   const rows = D.growth.filter(e => e.kind === kind).sort((a, b) => b.date.localeCompare(a.date));
   return { total: sum(rows, e => e.amount), rows };
 }
-function addGrowth(kind, amount, date, note, adj) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}), ...(adj ? { adj: true } : {}) }); touchGrowth(); }
+function addGrowth(kind, amount, date, note) { D.growth.push({ id: uid('g'), kind, date, amount: r2(amount), ...(note ? { note } : {}) }); touchGrowth(); }
 
-/* ----- the goal: a share of income received goes to savings and investments together ----- */
-const growthPct = () => { const p = D.settings.growthPct; return p > 0 ? p : 10; };
-const incomeReceived = ym => sum(itemsFor(ym).filter(i => i.type === 'income' && i.done && !i.skip), i => i.amount);
-/* new money put aside in a month: deposits entered on the Income tab
-   (set-to-a-new-total adjustments and withdrawals are not new money) */
-const asideFor = (kind, ym) => sum(D.growth.filter(e => e.kind === kind && !e.adj && e.amount > 0 && ymOf(e.date) === ym), e => e.amount);
-function growthPlan(ym) {
-  const pct = growthPct(), income = incomeReceived(ym), goal = r2(income * pct / 100);
-  const parts = GROWTH.map(([kind, label]) => ({ kind, label, done: asideFor(kind, ym) }));
-  const done = sum(parts, p => p.done), need = Math.max(0, r2(goal - done));
-  // the goal is shared evenly; suggest what each side is still short of its half, and if one is past its half the rest goes to the other
-  const half = r2(goal / 2), tgt = [half, r2(goal - half)];
-  let sug = parts.map((p, i) => Math.max(0, r2(tgt[i] - p.done)));
-  const tot = sum(sug);
-  if (tot > need && tot > 0) {
-    sug = sug.map(x => r2(x * need / tot));
-    const diff = r2(need - sum(sug)), j = Math.max(0, sug.findIndex(x => x > 0));
-    if (diff) sug[j] = r2(sug[j] + diff);
-  }
-  parts.forEach((p, i) => { p.suggest = sug[i]; });
-  return { pct, income, goal, done, need, parts };
-}
-
-/* the balance typed into the Planner for a month */
-function setPlan(ym, amount, source) {
-  const mo = ensureMonth(ym);
-  if (amount > 0) mo.plan = { amount: r2(amount), ...(source ? { source } : {}) }; else delete mo.plan;
-  touchMonth(ym);
-}
 function spendsFor(ym, tid) { const mo = D.months[ym]; return ((mo && mo.spends) || []).filter(s => s.t === tid); }
 function itemsFor(ym) {
   const mo = D.months[ym];
@@ -450,8 +421,7 @@ function loadSample() {
     d.months[ym] = d.months[ym] || { entries: {}, extras: [], spends: [] };
     list.forEach(([day, amount, note]) => { const date = clampDay(ym, day); if (date <= today) d.months[ym].spends.push({ id: uid('s'), t: gid, date, amount, ...(note ? { note } : {}) }); });
   });
-  d.months[cur].plan = { amount: 2150, source: 'Paycheck' };
-  d.growth = [{ id: 'g1', kind: 'savings', date: start + '-02', amount: 6200, note: 'Starting balance', adj: true }, { id: 'g2', kind: 'savings', date: addMonths(start, 1) + '-15', amount: 400, note: 'Birthday money' }, { id: 'g3', kind: 'investing', date: start + '-02', amount: 14500, note: 'Starting balance', adj: true }, { id: 'g4', kind: 'investing', date: cur + '-01', amount: 820, note: 'Updated to match the app', adj: true }];
+  d.growth = [{ id: 'g1', kind: 'savings', date: start + '-02', amount: 6200, note: 'Starting balance' }, { id: 'g2', kind: 'savings', date: addMonths(start, 1) + '-15', amount: 400, note: 'Birthday money' }, { id: 'g3', kind: 'investing', date: start + '-02', amount: 14500, note: 'Starting balance', adj: true }, { id: 'g4', kind: 'investing', date: cur + '-01', amount: 820, note: 'Updated to match the app', adj: true }];
   D = d;
   // oldest month: everything checked off and matched; last month: left for you to try Auto-match; this month: partly done
   const old = suggestMatches(start);

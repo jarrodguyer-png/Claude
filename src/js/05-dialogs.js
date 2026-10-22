@@ -37,19 +37,20 @@ function askConfirm({ title, text, ok, danger }, onOk, back) {
   $('#confirmOk').onclick = () => { closeModal(true); onOk(); };
   if (back) $('#modal').querySelector('[data-act=confirm-back]').onclick = back;
 }
-async function saveFile(name, text, mime) {
+async function saveFile(name, data, mime) {
+  const isText = typeof data === 'string', failed = () => (isText ? showText(name, data) : toast(`Could not save ${name}.`));
   try {
     if (window.claude && window.claude.use) {
       const dl = await window.claude.use('downloads');
-      if (dl) { await dl.save({ filename: name, data: text }); toast('Saved ' + name); return; }
+      if (dl) { await dl.save({ filename: name, data }); toast('Saved ' + name); return; }
     }
-  } catch (e) { if (e && e.code === 'declined') return; if (window.claude) return showText(name, text); }
+  } catch (e) { if (e && e.code === 'declined') return; if (window.claude) return failed(); }
   try {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name;
+    a.href = URL.createObjectURL(new Blob([data], { type: mime })); a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-  } catch (e) { showText(name, text); }
+  } catch (e) { failed(); }
 }
 function showText(name, text) {
   openModal(`${dlgHead(esc(name))}<div class="dlg-b"><p class="muted">Your browser blocked the download. Copy this text and save it as ${esc(name)}.</p><textarea class="inp" id="copyBox" rows="10" readonly style="font-family:var(--f-data);font-size:12px">${esc(text)}</textarea></div><div class="dlg-f"><button type="button" class="btn primary" id="copyBtn">Copy</button></div>`);

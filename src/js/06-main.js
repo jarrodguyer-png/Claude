@@ -3,7 +3,7 @@ const curYm = () => (UI.tab === 'bank' ? reconcileMonth() : UI.ym);
 const findItem = (key, ym = curYm()) => itemsFor(ym).find(i => i.key === key);
 const isBlank = () => !D.templates.length && !D.txns.length && !Object.keys(D.months).length;
 /* tab names from earlier versions still work in links and saved settings */
-const LEGACY_TABS = { obligations: 'month', bills: 'month', statements: 'bank', spending: 'bank', growth: 'income' };
+const LEGACY_TABS = { obligations: 'month', bills: 'month', statements: 'bank', spending: 'bank', growth: 'income', planner: 'month' };
 function go(tab) {
   if (tab === 'spending') UI.sub = 'spending';
   tab = LEGACY_TABS[tab] || tab;
@@ -26,6 +26,7 @@ const ACTIONS = {
     UI.open = UI.open === el.dataset.key ? null : el.dataset.key; render();
     const f = UI.open && $('.spendf input[name=amount]'); if (f) { f.scrollIntoView({ block: 'nearest' }); f.focus(); }
   },
+  'share-pdf': () => shareMonthlyUpdate(UI.ym),
   'toggle-paid': () => { UI.showPaid = !(UI.showPaid ?? RO()); render(); },
   'edit-item': el => openItemDialog(el.dataset.key),
   'del-growth': el => {
@@ -33,16 +34,7 @@ const ACTIONS = {
     const [gone] = D.growth.splice(i, 1); touchGrowth(); render();
     toast(`Removed ${money(gone.amount)}.`, { action: 'Undo', fn: () => { D.growth.push(gone); touchGrowth(); render(); } });
   },
-  'goal-put': el => {
-    const kind = el.dataset.kind, amt = parseFloat(el.dataset.amt), row = GROWTH.find(x => x[0] === kind);
-    if (!(amt > 0)) return;
-    addGrowth(kind, amt, entryDate(UI.ym), `Suggested ${growthPct()}%`); render();
-    toast(`Put ${money(amt)} in ${row[1]}.`, { action: 'Undo', fn: () => { const i = D.growth.findIndex(e => e.kind === kind && e.amount === r2(amt) && e.note === `Suggested ${growthPct()}%`); if (i >= 0) { D.growth.splice(i, 1); touchGrowth(); render(); } } });
-  },
   'growth-more': el => { UI.gAll = UI.gAll === el.dataset.kind ? null : el.dataset.kind; render(); },
-  'plan-use': el => { setPlan(UI.ym, parseFloat(el.dataset.amt), el.dataset.name); render(); },
-  'plan-clear': () => { setPlan(UI.ym, 0); render(); },
-  'plan-log': () => { const p = D.months[UI.ym] && D.months[UI.ym].plan; if (p) recordIncome(p.source || 'Paycheck', p.amount, entryDate(UI.ym)); },
   'add-bill': () => openAddBill(),
   'del-tmpl': el => askDeleteTemplate(el.dataset.id),
   'tmpl-stop': el => stopTemplate(el.dataset.id, el.dataset.ym),
@@ -149,7 +141,6 @@ const CHANGE = {
   fc: el => { UI.fc = el.value; UI.txLimit = 100; render(); },
   fu: el => { UI.fu = el.checked; UI.txLimit = 100; render(); },
   rm: el => { UI.rm = el.value; render(); },
-  gpct: el => { const v = parseFloat(el.value); if (v > 0 && v <= 100) { D.settings.growthPct = v; touchMeta(); } render(); },
   range: el => { UI.range = el.value; render(); },
   currency: el => { D.settings.currency = el.value; touchMeta(); render(); },
   'imp-map': el => { IM.map[el.dataset.k] = parseInt(el.value, 10); recomputeImport(); openImportDialog(); },
@@ -183,19 +174,13 @@ document.addEventListener('submit', e => {
     if (isNaN(t)) { toast('Enter the new total.'); return; }
     const diff = r2(t - growthFor(kind).total);
     if (!diff) { toast('That is already the total.'); return; }
-    addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`, true);
+    addGrowth(kind, diff, todayStr(), `Updated to ${money(t)}`);
     render(); toast(`${row[1]} is now ${money(t)}.`);
   }
   else if (e.target.classList.contains('pastef')) {
     const text = e.target.elements.pastetext.value;
     if (!text.trim()) { toast('Paste the statement text first.'); return; }
     handleFiles([new File([text], 'pasted statement.csv', { type: 'text/csv' })]);
-  }
-  else if (e.target.classList.contains('planf')) {
-    const a = parseFloat(e.target.elements.amount.value), prev = D.months[UI.ym] && D.months[UI.ym].plan;
-    if (isNaN(a) || a <= 0) { toast('Enter your balance.'); return; }
-    setPlan(UI.ym, a, prev && prev.amount === r2(a) ? prev.source : '');
-    render();
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });

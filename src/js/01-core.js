@@ -56,13 +56,12 @@ function moneyShort(n) {
 /* ---------- data model ----------
    templates : recurring bills and income (the "monthly obligations")
    months[ym]: { entries: { 'tmplId@YYYY-MM-DD': {done,date,amount,note,txn,skip} }, extras: [one-off items],
-                 spends: [{id,t:templateId,date,amount,note}],      (purchases entered against a spending budget)
-                 plan: {amount, source?} }                         (the balance typed into the Planner tab)
+                 spends: [{id,t:templateId,date,amount,note}] }     (purchases entered against a variable expense)
    a template with budget:true is a variable expense (a monthly amount you spend against); an amount of 0 means no limit set
    template.amount/day/day2/anchor are the starting values; template.changes [{from:'YYYY-MM',amount?,day?,day2?,anchor?}] holds later changes, so past months keep what they had.
    an entry may carry due:'YYYY-MM-DD', a due date moved for that one month
    txns      : imported statement lines {id,date,desc,amt,cat,man,src}; amt < 0 is money out
-   growth    : [{id,kind:'savings'|'investing',date,amount,note,adj?}] deposits (+), withdrawals (-) and set-to-a-new-total adjustments (adj)
+   growth    : [{id,kind:'savings'|'investing',date,amount,note}] deposits (+), withdrawals (-) and set-to-a-new-total adjustments
                on the Income tab, the only place savings and investments are recorded
    imports   : one record per uploaded file
    rules     : merchant key -> category, learned when you recategorise a transaction                */
@@ -96,12 +95,12 @@ const touchMeta = () => { dirty.add('meta'); Store.schedule(); };
 const touchMonth = ym => { dirty.add('m_' + ym); Store.schedule(); };
 const touchGrowth = () => { dirty.add('growth'); Store.schedule(); };
 const touchTxns = ym => { dirty.add('t_' + ym); Store.schedule(); };
-const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length || mo.plan);
+const monthHasData = mo => mo && (Object.keys(mo.entries).length || mo.extras.length || (mo.spends || []).length);
 
 function buildDoc(key) {
   if (key === 'meta') return { v: 1, settings: D.settings, templates: D.templates, rules: D.rules, cats: D.cats, imports: D.imports, sample: D.sample };
   if (key === 'growth') return D.growth.length ? { entries: D.growth } : null;
-  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [], ...(mo.plan ? { plan: mo.plan } : {}) } : null; }
+  if (key.startsWith('m_')) { const mo = D.months[key.slice(2)]; return monthHasData(mo) ? { entries: mo.entries, extras: mo.extras, spends: mo.spends || [] } : null; }
   if (key.startsWith('t_')) { const ym = key.slice(2); const list = D.txns.filter(t => ymOf(t.date) === ym); return list.length ? { list } : null; }
   return null;
 }
@@ -123,7 +122,7 @@ function dataFromDocs(docs) {
     d.sample = !!meta.sample;
   }
   for (const [k, v] of Object.entries(docs)) {
-    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [], ...(v.plan ? { plan: v.plan } : {}) };
+    if (k.startsWith('m_')) d.months[k.slice(2)] = { entries: v.entries || {}, extras: v.extras || [], spends: v.spends || [] };
     else if (k.startsWith('t_')) d.txns.push(...(v.list || []));
   }
   d.growth = (docs.growth && docs.growth.entries) || [];
