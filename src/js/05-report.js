@@ -64,32 +64,23 @@ function pdfNew() {
 
 /* the sheet: income in, bills paid, what is left to pay, and how the variable expenses stand */
 function monthlyReport(ym) {
-  const INK = [0.09, 0.11, 0.16], MUTED = [0.42, 0.46, 0.54], LINE = [0.85, 0.87, 0.91], PANEL = [0.955, 0.962, 0.977], ACCENT = [0.114, 0.357, 0.667], GOOD = [0.07, 0.46, 0.27], BAD = [0.74, 0.14, 0.14];
-  const items = itemsFor(ym), S = summarize(items), cur = thisMonth(), today = todayStr(), lastDay = `${ym}-${pad(daysIn(ym))}`;
+  const INK = [0.09, 0.11, 0.16], MUTED = [0.42, 0.46, 0.54], LINE = [0.85, 0.87, 0.91], PANEL = [0.955, 0.962, 0.977], ACCENT = [0.114, 0.357, 0.667];
+  const items = itemsFor(ym), cur = thisMonth(), today = todayStr(), lastDay = `${ym}-${pad(daysIn(ym))}`;
   const when = i => i.doneDate || i.due, byDate = f => (a, b) => f(a).localeCompare(f(b));
-  const fixed = items.filter(i => i.type === 'bill' && !i.budget && !i.skip);
-  const paid = fixed.filter(i => i.done).sort(byDate(when)), unpaid = fixed.filter(i => !i.done).sort(byDate(i => i.due));
-  const buds = items.filter(i => i.budget), room = buds.map(b => ({ b, left: r2(b.amount - b.spent) })).filter(x => x.b.amount > 0 && x.left > 0);
-  const inc = items.filter(i => i.type === 'income' && !i.skip), got = inc.filter(i => i.done).sort(byDate(when)), exp = inc.filter(i => !i.done).sort(byDate(i => i.due));
-  const paidSum = sum(paid, i => i.amount), unpaidSum = sum(unpaid, i => i.amount), gotSum = sum(got, i => i.amount), expSum = sum(exp, i => i.amount);
-  const pct = S.billsTotal ? Math.min(1, S.billsPaid / S.billsTotal) : 0;
+  // only what has actually happened: income received, bills paid and money spent on variable expenses
+  const paid = items.filter(i => i.type === 'bill' && !i.budget && !i.skip && i.done).sort(byDate(when));
+  const spent = items.filter(i => i.budget && i.spent > 0);
+  const got = items.filter(i => i.type === 'income' && !i.skip && i.done).sort(byDate(when));
+  const paidSum = sum(paid, i => i.amount), gotSum = sum(got, i => i.amount), spentSum = sum(spent, i => i.spent);
 
   const sections = [
-    { title: 'Income received', total: money(gotSum), empty: 'No income received yet.', rows: [
-      ...got.map(i => ({ d: fmtShort(when(i)), n: i.name, a: money(i.amount) })),
-      ...exp.map(i => ({ d: fmtShort(i.due), n: i.name + ' (expected)', a: money(i.amount), c: MUTED }))] },
-    { title: 'Bills paid', total: money(paidSum), empty: 'No bills paid yet.', rows: paid.map(i => ({ d: fmtShort(when(i)), n: i.name, a: money(i.amount) })) },
-    { title: 'Still to pay', total: money(S.billsLeft), empty: 'Everything is paid.', emptyColor: GOOD, rows: [
-      ...unpaid.map(i => { const late = i.due < today && ym <= cur; return { d: fmtShort(i.due), n: i.name + (late ? ' (late)' : ''), a: money(i.amount), c: late ? BAD : INK }; }),
-      ...room.map(x => ({ d: '', n: x.b.name + ' (left to spend)', a: money(x.left), c: MUTED }))] }
+    { title: 'Income received', total: money(gotSum), empty: 'No income received yet.', rows: got.map(i => ({ d: fmtShort(when(i)), n: i.name, a: money(i.amount) })) },
+    { title: 'Bills paid', total: money(paidSum), empty: 'No bills paid yet.', rows: paid.map(i => ({ d: fmtShort(when(i)), n: i.name, a: money(i.amount) })) }
   ];
-  if (buds.length) sections.push({ title: 'Variable expenses', total: 'Spent ' + money(S.budgetSpent), empty: '', rows: buds.map(b => {
-    const limit = b.amount > 0, over = limit && b.spent > b.amount + 0.005;
-    return { d: '', n: b.name, a: limit ? `${money(b.spent)} of ${money(b.amount)}` : `${money(b.spent)} (no limit)`, c: over ? BAD : INK };
-  }) });
+  if (spent.length) sections.push({ title: 'Variable expenses', total: money(spentSum), empty: '', rows: spent.map(i => ({ d: '', n: i.name, a: money(i.spent) })) });
 
   // pick a row height that fits one sheet; past that, carry on to a second sheet
-  const M = 44, CW = 595.28 - 2 * M, top = 250, bottom = 841.89 - 56;
+  const M = 44, CW = 595.28 - 2 * M, top = 218, bottom = 841.89 - 56;
   const nRows = sum(sections, s => Math.max(1, s.rows.length));
   const RH = Math.max(12.5, Math.min(15.5, (bottom - top - sections.length * 38) / nRows)), FS = RH >= 14 ? 9.5 : 8.5;
 
@@ -97,26 +88,18 @@ function monthlyReport(ym) {
   pdf.page();
   pdf.text(M, 46, "JARROD'S CFO  ·  MONTHLY UPDATE", { size: 8, bold: true, color: ACCENT, spacing: 1 });
   pdf.text(M, 78, fmtMonth(ym), { size: 28, bold: true, color: INK });
-  pdf.text(M, 97, ym === cur ? `Position as of ${fmtDate(today)}` : ym < cur ? `Month ended ${fmtDate(lastDay)}` : 'Planned amounts for the month', { size: 10, color: MUTED });
+  pdf.text(M, 97, ym === cur ? `Position as of ${fmtDate(today)}` : ym < cur ? `Month ended ${fmtDate(lastDay)}` : `${fmtMonth(ym)} has not started`, { size: 10, color: MUTED });
   pdf.hline(M, M + CW, 110, LINE, 0.8);
 
-  const gap = 10, bw = (CW - 2 * gap) / 3, by = 124;
-  [['INCOME RECEIVED', money(gotSum), expSum > 0 ? `${money(expSum)} more expected` : 'everything expected is in', INK],
-   ['PAID SO FAR', money(S.billsPaid), `bills ${money(paidSum)} + spending ${money(S.budgetSpent)}`, INK],
-   ['STILL TO PAY', money(S.billsLeft), `${plural(unpaid.length, 'bill')} ${money(unpaidSum)} + ${money(S.budgetLeft)} to spend`, ACCENT]].forEach(([label, value, sub, c], i) => {
+  const gap = 10, bw = (CW - gap) / 2, by = 124;
+  [['INCOME RECEIVED', money(gotSum), plural(got.length, 'payment')],
+   ['PAID SO FAR', money(paidSum + spentSum), spentSum > 0 ? `bills ${money(paidSum)} + spending ${money(spentSum)}` : plural(paid.length, 'bill') + ' paid']].forEach(([label, value, sub], i) => {
     const x = M + i * (bw + gap);
     pdf.rect(x, by, bw, 62, PANEL);
     pdf.text(x + 12, by + 18, label, { size: 7.5, bold: true, color: MUTED, spacing: 0.8 });
-    pdf.text(x + 12, by + 41, value, { size: 17, bold: true, color: c });
-    let fs = 7.5; while (fs > 6 && pdfWidth(sub, fs, false) > bw - 24) fs -= 0.25;
-    pdf.text(x + 12, by + 55, pdfFit(sub, fs, false, bw - 24), { size: fs, color: MUTED });
+    pdf.text(x + 12, by + 41, value, { size: 17, bold: true, color: INK });
+    pdf.text(x + 12, by + 55, pdfFit(sub, 7.5, false, bw - 24), { size: 7.5, color: MUTED });
   });
-
-  const py = by + 62 + 20;
-  pdf.text(M, py, `${S.billsDone} of ${S.bills.length} bills paid`, { size: 8.5, color: MUTED });
-  pdf.text(M + CW, py, `${Math.round(pct * 100)}% of the month's outgoings`, { size: 8.5, color: MUTED, align: 'right' });
-  pdf.rect(M, py + 7, CW, 5, LINE);
-  if (pct > 0) pdf.rect(M, py + 7, CW * pct, 5, pct >= 0.999 ? GOOD : ACCENT);
 
   let y = top;
   const sheetHead = () => { pdf.page(); y = M + 6; pdf.text(M, y, `${fmtMonth(ym)} (continued)`, { size: 10, bold: true, color: MUTED }); y += 26; };
@@ -126,7 +109,7 @@ function monthlyReport(ym) {
     pdf.text(M + CW, y, sec.total, { size: 11.5, bold: true, color: INK, align: 'right' });
     pdf.hline(M, M + CW, y + 7, LINE, 0.8);
     y += 7 + RH;
-    if (!sec.rows.length && sec.empty) { pdf.text(M, y - 3, sec.empty, { size: FS, color: sec.emptyColor || MUTED }); y += RH; }
+    if (!sec.rows.length && sec.empty) { pdf.text(M, y - 3, sec.empty, { size: FS, color: MUTED }); y += RH; }
     for (const r of sec.rows) {
       if (y > bottom) { sheetHead(); }
       const c = r.c || INK, aw = pdfWidth(r.a, FS, false), nx = M + (r.d ? 54 : 0);
