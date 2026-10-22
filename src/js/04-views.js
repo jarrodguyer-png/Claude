@@ -61,6 +61,7 @@ function viewMonth() {
     </div>
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
+    ${ro ? '' : `<div class="gnote"><span>Savings <b class="num">${moneyWhole(growthFor('savings').total)}</b></span><span>Investments <b class="num">${moneyWhole(growthFor('investing').total)}</b></span></div>`}
     <div class="card-f"><span class="muted">One page to share: income received and bills paid</span><button class="btn sm" data-act="share-pdf">Monthly update PDF</button></div>
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), buds = items.filter(i => i.budget);

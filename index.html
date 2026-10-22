@@ -188,6 +188,8 @@ details.more summary { cursor: pointer; padding: 11px 0; font-weight: 600; font-
 .row.soon .due { color: var(--warn); font-weight: 600; }
 .card-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--line-2); font-size: 14px; }
 .card-f .total { font-weight: 600; }
+.gnote { display: flex; flex-wrap: wrap; gap: 2px 18px; padding: 10px 18px; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--ink-2); }
+.gnote b { color: var(--ink); font-weight: 600; }
 
 /* variable expenses use the same rows as bills; the + opens a small entry panel */
 .chk.add { color: var(--ink-2); border-color: var(--line); }
@@ -1402,6 +1404,7 @@ function viewMonth() {
     </div>
     <div class="progress"><div class="track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Bills paid and budgets spent"><i style="width:${Math.min(100, pct)}%"></i></div>
       <div class="cap"><span>${S.billsDone} of ${S.bills.length} bills paid</span><span class="actions">${late ? `<span class="pill bad">${plural(late, 'bill')} overdue</span>` : ''}${over.map(b => `<span class="pill bad">${esc(b.name)} over budget</span>`).join('')}</span></div></div>
+    ${ro ? '' : `<div class="gnote"><span>Savings <b class="num">${moneyWhole(growthFor('savings').total)}</b></span><span>Investments <b class="num">${moneyWhole(growthFor('investing').total)}</b></span></div>`}
     <div class="card-f"><span class="muted">One page to share: income received and bills paid</span><button class="btn sm" data-act="share-pdf">Monthly update PDF</button></div>
   </section>`;
   const bills = items.filter(i => i.type === 'bill' && !i.budget), buds = items.filter(i => i.budget);
